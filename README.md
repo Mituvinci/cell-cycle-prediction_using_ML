@@ -249,6 +249,4 @@ If you use this code, please cite:
 
 ## Acknowledgments
 
-- HPC Cluster: DOLLY SODS (155 GPUs)
-- Reviewers: Briefings in Bioinformatics
 - Existing Tools: Seurat, Tricycle, Revelio, ccAFv2
