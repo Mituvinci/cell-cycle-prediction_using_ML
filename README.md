@@ -236,24 +236,14 @@ See `configs/phase_mappings/training_data.yaml` for complete rationale.
 
 If you use this code, please cite:
 
+```bibtex
+@inproceedings{anonymous2025cellcycle,
+  title={Deep Learning Models for Cell Cycle Phase Prediction from Single-Cell RNA Sequencing Data},
+  author={Anonymous},
+  booktitle={Under Review},
+  year={2025}
+}
 ```
-Akhter et al., "Deep Learning Models for Cell Cycle Phase Prediction
-from Single-Cell RNA Sequencing Data", Briefings in Bioinformatics (under review)
-```
-
----
-
-## Contact
-
-For questions or issues:
-- Create an issue in this repository
-- Contact: [PI Email]
-
----
-
-## License
-
-TBD
 
 ---
 
