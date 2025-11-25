@@ -1,0 +1,70 @@
+# Phase Mapping Configuration for Training Data (REH and SUP-B15)
+# =================================================================
+#
+# This file defines how sub-phases predicted by different tools are mapped
+# to the 3 main cell cycle phases (G1, S, G2M).
+#
+# These mappings were determined by:
+# 1. Creating contingency tables comparing tool predictions
+# 2. Calculating observed/expected ratios
+# 3. Generating heatmaps with color gradients
+# 4. Manually inspecting heatmap colors to determine phase similarities
+#
+# Different tools predict different numbers of phases:
+# - Seurat: G1, S, G2M (already 3 phases)
+# - Tricycle: G1.S, G2, G2.M, M.G1, NA, S (6+ phases)
+# - Revelio: G1.S, G2, G2.M, M.G1, S (5 phases)
+# - ccAFv2: G1, G2/M, Late G1, M/Early G1, S, S/G2, Unknown, qG0 (8 phases)
+
+dataset: "training"
+cell_lines: ["REH", "SUP-B15"]
+consensus_requirement: "4_tools_agreement"  # Require all 4 tools to agree
+
+# Phase mappings for each tool
+mappings:
+  seurat:
+    # Seurat already predicts 3 phases
+    G1: "G1"
+    S: "S"
+    G2M: "G2M"
+
+  tricycle:
+    # Based on heatmap analysis
+    G1.S: "S"       # Transition phase maps to S based on high S correlation
+    G2: "G2M"       # G2 phase maps to G2M
+    G2.M: "G2M"     # G2/M transition maps to G2M
+    M.G1: "G1"      # M/G1 transition maps to G1 based on heatmap
+    NA: "G2M"       # NAs predominantly occur in G2M based on contingency analysis
+    S: "S"          # S phase remains S
+
+  revelio:
+    # Based on heatmap analysis
+    G1.S: "S"       # G1/S transition maps to S
+    G2: "G2M"       # G2 phase maps to G2M
+    G2.M: "G2M"     # G2/M transition maps to G2M
+    M.G1: "G1"      # M/G1 transition maps to G1
+    S: "S"          # S phase remains S
+
+  ccafv2:
+    # Based on heatmap analysis
+    G1: "G1"                # G1 remains G1
+    "G2/M": "G2M"           # G2/M maps to G2M
+    "Late G1": "G1"         # Late G1 maps to G1 based on heatmap
+    "M/Early G1": "G1"      # M/Early G1 maps to G1
+    S: "S"                  # S remains S
+    "S/G2": "S"             # S/G2 transition maps to S (SUP dataset)
+    Unknown: "S"            # Unknown maps to S based on contingency analysis (SUP dataset)
+    qG0: "G1"               # Quiescent G0 maps to G1 (SUP dataset)
+
+# Notes on dataset-specific variations
+# REH: Uses most mappings above
+# SUP: Has additional phases (S/G2, qG0) that REH doesn't have
+
+# Rationale for each mapping (from obs/expect heatmap analysis):
+# - G1.S → S: High observed/expected ratio with S phase (>2.0)
+# - G2 → G2M: High observed/expected ratio with G2M phase (>2.5)
+# - G2.M → G2M: High observed/expected ratio with G2M phase (>2.2)
+# - M.G1 → G1: High observed/expected ratio with G1 phase (>2.2)
+# - NA → G2M: NA labels co-occur most with G2M phase
+# - Unknown → S: Based on contingency table, Unknown correlates with S
+# - qG0 → G1: Quiescent cells are in G1-like state

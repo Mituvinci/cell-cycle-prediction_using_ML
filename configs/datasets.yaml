@@ -1,0 +1,74 @@
+# Dataset Configuration for Cell Cycle Prediction
+# ================================================
+
+# Training Datasets (REH and SUP-B15)
+training:
+  reh:
+    name: "REH"
+    description: "REH human leukemia cell line (10x Multiome)"
+    path: "data/Training_data/reh/filtered_normalized_gene_expression_cc_label1_GD428_21136_Hu_REH_Parental_overlapped_all_four_regions.csv"
+    cell_id_column: "gex_barcode"
+    label_column: "Predicted"
+    num_cells: null  # To be filled after loading
+
+  sup:
+    name: "SUP-B15"
+    description: "SUP-B15 human leukemia cell line (10x Multiome)"
+    path: "data/Training_data/sup/filtered_normalized_gene_expression_cc_label2_GD444_21136_Hu_Sup_Parental_overlapped_all_four_regions.csv"
+    cell_id_column: "gex_barcode"
+    label_column: "Predicted"
+    num_cells: null
+
+# Benchmark Datasets (with FUCCI ground truth)
+benchmark:
+  gse146773:
+    name: "GSE146773"
+    description: "mESC SmartSeq2 dataset with FUCCI labels"
+    platform: "SmartSeq2"
+    species: "mouse"
+    ground_truth: true
+    data_path: "data/Training_data/Benchmark_data/GSE146773_seurat_normalized_gene_expression.csv"
+    fucci_labels_path: "data/Training_data/Benchmark_data/GSE146773_fucci_coords.csv"
+    predictions:
+      seurat: "data/Training_data/Benchmark_data/predict_by_seurat_GSE146773.csv"
+      tricycle: "data/Training_data/Benchmark_data/prediction_by_tricycle_GSE146773.csv"
+      revelio: "data/Training_data/Benchmark_data/predict_revelio_gse146773cell_cycle_assignments_revelio.csv"
+      ccafv2: "data/Training_data/Benchmark_data/ccAFV2_GSE146773_cell_cycle_labels.csv"
+
+  gse64016:
+    name: "GSE64016"
+    description: "mESC Fluidigm C1 dataset with FUCCI labels"
+    platform: "Fluidigm C1"
+    species: "mouse"
+    ground_truth: true
+    data_path: "data/Training_data/Benchmark_data/GSE64016_seurat_normalized_gene_expression.csv"
+    fucci_labels_path: "data/Training_data/Benchmark_data/SC1/sc1_GSE64016_original_CellCycleOrder.csv"
+    predictions:
+      seurat: "data/Training_data/Benchmark_data/predict_by_seurat_GSE64016.csv"
+      tricycle: "data/Training_data/Benchmark_data/prediction_by_tricycle_GSE64016.csv"
+      revelio: "data/Training_data/Benchmark_data/predict_revelio_gse64016cell_cycle_assignments_revelio.csv"
+      ccafv2: "data/Training_data/Benchmark_data/predicted_ccAFV2_predicted_GSE64016_cell_cycle_labels.csv"
+
+# Mouse datasets (for reviewer requirements - to be added)
+mouse:
+  placeholder:
+    name: "Mouse Dataset"
+    description: "To be downloaded after code reorganization"
+    platform: "TBD"
+    species: "mouse"
+    ground_truth: false
+    data_path: "data/mouse/TBD.csv"
+
+# Data preprocessing parameters
+preprocessing:
+  test_size: 0.2
+  random_state: 42
+  scaling_method: "standard"  # Options: standard, minmax, robust
+  feature_selection: null  # Options: ElasticNet, SelectKBest, null
+  use_smote: true
+  use_undersampling: true
+
+# Class labels
+labels:
+  classes: ["G1", "S", "G2M"]
+  num_classes: 3

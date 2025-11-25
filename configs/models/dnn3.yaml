@@ -1,0 +1,68 @@
+# DNN3 (SimpleDenseModel) Configuration
+# ======================================
+# Top-performing model according to benchmark results
+
+model:
+  name: "DNN3"
+  type: "SimpleDenseModel"
+  description: "3-layer dense neural network - top performer"
+
+architecture:
+  input_dim: null  # To be set based on data
+  num_classes: 3
+  layers:
+    - type: "Linear"
+      in_features: "input_dim"
+      out_features: 128
+    - type: "ReLU"
+    - type: "Dropout"
+      p: 0.5
+    - type: "Linear"
+      in_features: 128
+      out_features: 64
+    - type: "ReLU"
+    - type: "Dropout"
+      p: 0.3
+    - type: "Linear"
+      in_features: 64
+      out_features: "num_classes"
+
+training:
+  optimizer: "Adam"
+  learning_rate: 0.001
+  batch_size: 64
+  epochs: 100
+  early_stopping_patience: 10
+  use_lr_scheduler: false
+
+  # Loss function
+  loss:
+    type: "focal_loss"  # or "cross_entropy"
+    alpha: 0.25
+    gamma: 2.0
+
+  # Device
+  device: "cuda"  # or "cpu"
+
+  # Mixed precision training
+  use_amp: false
+
+# Optuna hyperparameter search (if enabled)
+optuna:
+  enabled: false
+  n_trials: 50
+  search_space:
+    learning_rate: [0.0001, 0.001, 0.01]
+    batch_size: [32, 64, 128]
+    dropout1: [0.3, 0.4, 0.5, 0.6]
+    dropout2: [0.2, 0.3, 0.4]
+
+# Data augmentation
+augmentation:
+  enabled: false
+
+# Paths
+paths:
+  save_dir: "models/saved_models/dnn3"
+  log_dir: "models/saved_models/dnn3/logs"
+  checkpoint: null  # Path to pretrained weights if available
