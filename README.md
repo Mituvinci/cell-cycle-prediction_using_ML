@@ -20,6 +20,20 @@ This repository contains a modular, reproducible pipeline for predicting cell cy
 
 ---
 
+## Datasets
+
+### Training Data
+- **REH and SUP-B15**: Human leukemia cell lines (10x Chromium Multiome)
+- **Download**: [GSE293316](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE293316)
+
+### Benchmark Data (Ground Truth)
+- **GSE146773**: Human U-2 OS cells with FUCCI reporter
+  - Download: [https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE146773](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE146773)
+- **GSE64016**: Mouse ESCs with FUCCI reporter
+  - Download: [https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE64016](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE64016)
+
+---
+
 ## Directory Structure
 
 ```
@@ -30,20 +44,20 @@ cell_cycle_prediction/
    analyze/                  # Contingency tables, heatmaps
    assign/                   # Phase reassignment
    merge/                    # Merge consensus labels
- 2_model_training/             # ✅ Model training modules
-   models/                   # ✅ Model architectures
+ 2_model_training/             # Model training modules
+   models/                   # Model architectures
      __init__.py
      dense_models.py       # DNN3, DNN5
      cnn_models.py         # CNNModel
      hybrid_models.py      # Hybrid, Feature Embedding
-   utils/                    # ✅ Training utilities
+   utils/                    # Training utilities
        __init__.py
        training_utils.py     # Focal loss, training, evaluation
        data_utils.py         # Data loading, preprocessing
  3_evaluation/                 # Evaluation scripts (TBD)
  4_interpretability/           # SHAP analysis (TBD)
  5_visualization/              # Figure generation (TBD)
- configs/                      # ✅ Configuration files
+ configs/                      # Configuration files
    datasets.yaml             # Dataset paths and parameters
    models/
      dnn3.yaml             # DNN3 configuration
@@ -62,9 +76,9 @@ cell_cycle_prediction/
    phase_assignment_heatmaps/
  scripts/                      # Pipeline scripts (TBD)
  docs/                         # Documentation (TBD)
- README.md                     # ✅ This file
- requirements.txt              # ✅ Python dependencies
- environment.yml               # ✅ Conda environment
+ README.md                     # This file
+ requirements.txt              # Python dependencies
+ environment.yml               # Conda environment
 ```
 
 ---
@@ -95,73 +109,108 @@ pip install -r requirements.txt
 
 ## Quick Start
 
-### 1. Import Models
+### 1. Train Deep Learning Models
 
-```python
-from models import SimpleDenseModel, DeepDenseModel, CNNModel
-import torch
+```bash
+# Train DNN3 (top performer) with nested CV
+python 2_model_training/train_deep_learning.py \
+  --model dnn3 \
+  --data data/processed/consensus_labels.csv \
+  --n_trials 50 \
+  --outer_folds 5 \
+  --inner_folds 3 \
+  --feature_selection none \
+  --output_dir models/saved_models/dnn3/
 
-# Create DNN3 model (top performer)
-model = SimpleDenseModel(input_dim=2000, num_classes=3)
+# Train with different architecture
+python 2_model_training/train_deep_learning.py \
+  --model dnn5 \
+  --n_trials 30 \
+  --outer_folds 5 \
+  --inner_folds 3 \
+  --output_dir models/saved_models/dnn5/
 
-# Move to GPU if available
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = model.to(device)
+# Train CNN model
+python 2_model_training/train_deep_learning.py \
+  --model cnn \
+  --n_trials 50 \
+  --output_dir models/saved_models/cnn/
 ```
 
-### 2. Load and Preprocess Data
+### 2. Train Traditional ML Models
 
-```python
-from utils import load_and_preprocess_data
+```bash
+# Train Random Forest
+python 2_model_training/train_traditional_ml.py \
+  --model random_forest \
+  --data data/processed/consensus_labels.csv \
+  --n_trials 50 \
+  --outer_folds 5 \
+  --inner_folds 3 \
+  --output_dir models/saved_models/random_forest/
 
-# Load training data
-reh_data, sup_data = load_and_preprocess_data(
-    reh_path="data/Training_data/reh/filtered_normalized_gene_expression_cc_label1_GD428_21136_Hu_REH_Parental_overlapped_all_four_regions.csv",
-    sup_path="data/Training_data/sup/filtered_normalized_gene_expression_cc_label2_GD444_21136_Hu_Sup_Parental_overlapped_all_four_regions.csv",
-    scaling_method='standard'
-)
+# Train LightGBM
+python 2_model_training/train_traditional_ml.py \
+  --model lgbm \
+  --n_trials 50 \
+  --output_dir models/saved_models/lgbm/
+
+# Train Ensemble (VotingClassifier)
+python 2_model_training/train_traditional_ml.py \
+  --model ensemble \
+  --n_trials 50 \
+  --output_dir models/saved_models/ensemble_tml/
 ```
 
-### 3. Train Model
+### 3. Evaluate Models on Benchmark Data
 
-```python
-from utils import train_model, focal_loss
-import torch.optim as optim
-
-# Setup training
-optimizer = optim.Adam(model.parameters(), lr=0.001)
-criterion = focal_loss
-
-# Train
-model = train_model(
-    model=model,
-    train_loader=train_loader,
-    optimizer=optimizer,
-    criterion=criterion,
-    epochs=100,
-    log_dir="models/saved_models/dnn3/logs",
-    early_stopping_patience=10,
-    device=device
-)
+```bash
+# Evaluate single model
+python 3_evaluation/evaluate_models.py \
+  --model_dir models/saved_models/dnn3/fold_0/ \
+  --benchmark_data data/processed/GSE146773_preprocessed.csv \
+  --ground_truth data/processed/GSE146773_ground_truth.csv \
+  --output results/dnn3_gse146773_evaluation.csv
 ```
 
-### 4. Evaluate Model
+### 4. Ensemble Methods
 
-```python
-from utils import evaluate_model
+```bash
+# Top-3 Deep Learning Score Fusion
+python 3_evaluation/ensemble_fusion.py \
+  --fusion_type score \
+  --top_k 3 \
+  --model_dirs models/saved_models/dnn3/fold_0/ models/saved_models/dnn5/fold_0/ models/saved_models/cnn/fold_0/ \
+  --benchmark_data data/processed/GSE146773_preprocessed.csv \
+  --ground_truth data/processed/GSE146773_ground_truth.csv \
+  --output results/ensemble_top3_score.csv
 
-metrics = evaluate_model(
-    model=model,
-    data_loader=test_loader,
-    criterion=criterion,
-    label_encoder=label_encoder,
-    save_dir="results/",
-    device=device,
-    dataset_name="GSE146773"
-)
+# Top-5 Deep Learning Decision Fusion
+python 3_evaluation/ensemble_fusion.py \
+  --fusion_type decision \
+  --top_k 5 \
+  --model_dirs models/saved_models/dnn3/fold_0/ models/saved_models/dnn5/fold_0/ models/saved_models/cnn/fold_0/ models/saved_models/hybrid/fold_0/ models/saved_models/feature_embedding/fold_0/ \
+  --benchmark_data data/processed/GSE146773_preprocessed.csv \
+  --ground_truth data/processed/GSE146773_ground_truth.csv \
+  --output results/ensemble_top5_decision.csv
+```
 
-print(f"Accuracy: {metrics['accuracy']:.4f}")
-print(f"Balanced Accuracy: {metrics['balanced_accuracy']:.4f}")
+### 5. SHAP Interpretability Analysis
+
+```bash
+# SHAP analysis for DNN3
+python 4_interpretability/shap_analysis.py \
+  --model_dir models/saved_models/dnn3/fold_0/ \
+  --data data/processed/consensus_labels.csv \
+  --model_type deep_learning \
+  --output_dir results/shap/dnn3/
+
+# SHAP analysis for Random Forest
+python 4_interpretability/shap_analysis.py \
+  --model_dir models/saved_models/random_forest/fold_0/ \
+  --data data/processed/consensus_labels.csv \
+  --model_type traditional_ml \
+  --output_dir results/shap/random_forest/
 ```
 
 ---
