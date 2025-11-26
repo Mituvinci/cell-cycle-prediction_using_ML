@@ -36,8 +36,6 @@ def perform_nested_cv_dn(
     selection_method=None,
     scaling_method="standard",
     n_trials=2,
-    epoch_start=100,
-    epoch_end=2000,
     cv=5
 ):
     """
@@ -60,9 +58,11 @@ def perform_nested_cv_dn(
         selection_method (str): Feature selection method (None, 'SelectKBest', 'ElasticCV'). Defaults to None.
         scaling_method (str): Scaling method ('standard', 'minmax', 'robust'). Defaults to 'standard'.
         n_trials (int): Number of Optuna trials for hyperparameter optimization. Defaults to 2.
-        epoch_start (int): Minimum epochs for Optuna search. Defaults to 100.
-        epoch_end (int): Maximum epochs for Optuna search. Defaults to 2000.
         cv (int): Number of cross-validation folds. Defaults to 5.
+
+    Note:
+        Training uses fixed max_epochs=1500 with early_stopping_patience=100.
+        Optuna optimizes learning_rate, optimizer, and model architecture parameters.
     """
     # Create the directory if it doesn't exist
     os.makedirs(save_model_here, exist_ok=True)
@@ -161,9 +161,7 @@ def perform_nested_cv_dn(
                 train_loader=train_inner_loader,
                 val_loader=val_loader,
                 device=device,
-                n_trials=n_trials,
-                epoch_start=epoch_start,
-                epoch_end=epoch_end
+                n_trials=n_trials
             )
 
             best_model.to(device)
@@ -178,10 +176,10 @@ def perform_nested_cv_dn(
             peak_mem_gpu = torch.cuda.max_memory_allocated(device) / 1e9 if torch.cuda.is_available() else 0
             start_mem_cpu = psutil.virtual_memory().used / 1e9  # in GB
 
-            print(f"\nTraining final model with best hyperparameters ({best_params['epochs']} epochs)...")
+            print(f"\nTraining final model with best hyperparameters (max {best_params['epochs']} epochs, early stopping patience=100)...")
             train_loss, train_score, best_model = train_model(
                 best_model, train_loader, optimizer, criterion, epochs=best_params['epochs'], log_dir=save_model_here,
-                early_stopping_patience=20, trial=None, use_lr_scheduler=use_scheduler, step_size=step_size, gamma=gamma
+                early_stopping_patience=100, trial=None, use_lr_scheduler=use_scheduler, step_size=step_size, gamma=gamma
             )
             train_scores.append(train_score)
             train_losses.append(train_loss)

@@ -42,14 +42,18 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Train CNN on SUP data (like your example)
-  python train_deep_learning.py --model cnn --dataset sup --output ./models/CNN/ --epochs-start 100 --epochs-end 1500 --trials 20 --cv 5
+  # Train CNN on SUP data
+  python train_deep_learning.py --model cnn --dataset sup --output ./models/CNN/ --trials 20 --cv 5
 
   # Train DNN3 (SimpleDenseModel) on REH data
   python train_deep_learning.py --model simpledense --dataset reh --output ./models/DNN3/
 
   # Train with feature selection
   python train_deep_learning.py --model deepdense --dataset sup --feature-selection ElasticCV --output ./models/DNN5/
+
+Note:
+  Training uses max_epochs=1500 with early_stopping_patience=100.
+  Optuna optimizes learning_rate, optimizer, and architecture parameters.
 
 Available models:
   - simpledense (DNN3)
@@ -112,20 +116,6 @@ Available models:
         help='Number of Optuna trials for hyperparameter optimization (default: 20)'
     )
 
-    parser.add_argument(
-        '--epochs-start',
-        type=int,
-        default=100,
-        help='Minimum epochs for Optuna search (default: 100)'
-    )
-
-    parser.add_argument(
-        '--epochs-end',
-        type=int,
-        default=1500,
-        help='Maximum epochs for Optuna search (default: 1500)'
-    )
-
     # Cross-validation
     parser.add_argument(
         '--cv',
@@ -146,7 +136,7 @@ Available models:
     print(f"Feature Selection: {args.feature_selection if args.feature_selection else 'None'}")
     print(f"Scaling Method: {args.scaling}")
     print(f"Optuna Trials: {args.trials}")
-    print(f"Epoch Range: {args.epochs_start} - {args.epochs_end}")
+    print(f"Max Epochs: 1500 (with early stopping patience=100)")
     print(f"Cross-Validation Folds: {args.cv}")
     print("=" * 80)
     print()
@@ -159,8 +149,6 @@ Available models:
         selection_method=args.feature_selection,
         scaling_method=args.scaling,
         n_trials=args.trials,
-        epoch_start=args.epochs_start,
-        epoch_end=args.epochs_end,
         cv=args.cv
     )
 

@@ -23,9 +23,7 @@ def optimize_model_with_optuna(
     train_loader,
     val_loader,
     device,
-    n_trials=5,
-    epoch_start=100,
-    epoch_end=2000
+    n_trials=5
 ):
     """
     A unified Optuna-based function that:
@@ -47,8 +45,6 @@ def optimize_model_with_optuna(
         val_loader (DataLoader): DataLoader for validation set (for hyperparameter search).
         device (torch.device): e.g. "cuda" or "cpu".
         n_trials (int): How many trials Optuna should run.
-        epoch_start (int): Minimum epochs for Optuna search.
-        epoch_end (int): Maximum epochs for Optuna search.
 
     Returns:
         (model, optimizer, best_params)
@@ -87,7 +83,8 @@ def optimize_model_with_optuna(
         # Universal hyperparams
         learning_rate = trial.suggest_float('learningrate', 1e-5, 1e-1, log=True)
         optimizer_name = trial.suggest_categorical('optimizer', ['Adam', 'RMSprop', 'SGD'])
-        epochs = trial.suggest_int('epochs', epoch_start, epoch_end)
+        # Fixed epochs - early stopping will handle optimal stopping point
+        epochs = 1500  # Maximum epochs, early stopping will terminate earlier if needed
 
         # Distinguish special models
         special_models = [enhancedense, enhancedenseAttention, featureembedding, hybridcnn, vae_pretrain]

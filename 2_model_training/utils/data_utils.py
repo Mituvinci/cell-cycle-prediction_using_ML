@@ -198,13 +198,17 @@ def load_and_preprocess_data(scaling_method, is_reh=True, check_feature=False, s
     Returns:
         tuple: (X_train_resampled, X_test, y_train_resampled, y_test, cell_ids_test, scaler, label_encoder)
     """
-    # Paths to your processed RNA data files
-    path_reh = (
-        "D:/Halima's Data/Thesis_2/RCode/filtered_result/re_assign_cc/reh/"
+    # Paths to your processed RNA data files (dynamically find project root)
+    import os
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    data_dir = os.path.join(project_root, "data")
+
+    path_reh = os.path.join(
+        data_dir,
         "filtered_normalized_gene_expression_cc_label1_GD428_21136_Hu_REH_Parental_overlapped_all_four_regions.csv"
     )
-    path_sup = (
-        "D:/Halima's Data/Thesis_2/RCode/filtered_result/re_assign_cc/sup/"
+    path_sup = os.path.join(
+        data_dir,
         "filtered_normalized_gene_expression_cc_label2_GD444_21136_Hu_Sup_Parental_overlapped_all_four_regions.csv"
     )
 
