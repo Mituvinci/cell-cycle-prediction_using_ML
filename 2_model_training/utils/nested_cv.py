@@ -36,7 +36,8 @@ def perform_nested_cv_dn(
     selection_method=None,
     scaling_method="standard",
     n_trials=2,
-    cv=5
+    cv=5,
+    custom_data_path=None
 ):
     """
     Performs nested cross-validation for PyTorch models.
@@ -101,7 +102,8 @@ def perform_nested_cv_dn(
 
         # Load and preprocess data
         X_train, X_test, y_train_encoded, y_test, cell_ids_test, scaler, label_encoder = load_and_preprocess_data(
-            scaling_method=scaling_method, is_reh=(reh_or_sup == "reh"), selection_method=selection_method
+            scaling_method=scaling_method, is_reh=(reh_or_sup == "reh"), selection_method=selection_method,
+            custom_data_path=custom_data_path
         )
 
         input_dim = X_train.shape[1]
@@ -322,7 +324,8 @@ def perform_nested_cv_non_neural(
     selection_method=None,   # e.g. "SelectKBest", "ElasticNetCV", or None
     scaling_method="standard",
     n_trials=20,              # How many Optuna trials
-    outer_splits=5          # Outer folds
+    outer_splits=5,          # Outer folds
+    custom_data_path=None
 ):
     """
     Aurélien Géron's recommended nested CV approach for 4 model types:
@@ -383,7 +386,8 @@ def perform_nested_cv_non_neural(
         X_train, X_test, y_train, y_test, cell_ids_test, scaler, label_encoder = load_and_preprocess_data(
             scaling_method=scaling_method,
             is_reh=(reh_or_sup == "reh"),
-            selection_method=selection_method
+            selection_method=selection_method,
+            custom_data_path=custom_data_path
         )
 
         # (B) Align features

@@ -150,6 +150,18 @@ def main():
         default=None,
         help='Output CSV file path (default: results/model_name_evaluation.csv)'
     )
+    parser.add_argument(
+        '--custom_benchmark',
+        type=str,
+        default=None,
+        help='Path to custom benchmark data CSV'
+    )
+    parser.add_argument(
+        '--custom_benchmark_name',
+        type=str,
+        default='CustomBenchmark',
+        help='Name for custom benchmark (used in output files)'
+    )
 
     args = parser.parse_args()
 
@@ -185,6 +197,67 @@ def main():
         results.append(metrics)
 
         print(f"  Accuracy: {metrics['accuracy']:.2f}%")
+        print(f"{'='*80}\n")
+
+    # Evaluate on custom benchmark if provided
+    if args.custom_benchmark is not None:
+        print(f"{'='*80}")
+        print(f"{args.custom_benchmark_name}: Evaluating custom benchmark...")
+        print(f"{'='*80}")
+
+        # Load custom benchmark
+        from utils.data_utils import load_custom_benchmark
+        benchmark_features, benchmark_labels, _ = load_custom_benchmark(
+            args.custom_benchmark, scaler, args.custom_benchmark_name
+        )
+
+        if is_tml:
+            from utils.training_utils import evaluate_model_non_neural
+            benchmark_labels_encoded = label_encoder.transform(benchmark_labels)
+            accuracy, f1, precision, recall, roc_auc, balanced_acc, mcc, kappa, _, _ = evaluate_model_non_neural(
+                model, benchmark_features, benchmark_labels_encoded, label_encoder,
+                model_dir, dataset_name=args.custom_benchmark_name
+            )
+        else:
+            import torch
+            from torch.utils.data import DataLoader, TensorDataset
+            import torch.nn as nn
+            benchmark_labels_encoded = torch.tensor(
+                label_encoder.transform(benchmark_labels),
+                dtype=torch.long
+            ).to(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+
+            benchmark_tensor = torch.tensor(
+                benchmark_features.values,
+                dtype=torch.float32
+            ).to(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+
+            benchmark_loader = DataLoader(
+                TensorDataset(benchmark_tensor, benchmark_labels_encoded),
+                batch_size=32,
+                shuffle=False
+            )
+
+            from utils.training_utils import evaluate_model
+            accuracy, test_loss, f1, precision, recall, roc_auc, balanced_acc, mcc, kappa, _, _, _ = evaluate_model(
+                model, benchmark_loader, nn.CrossEntropyLoss(), label_encoder,
+                model_dir, dataset_name=args.custom_benchmark_name
+            )
+
+        custom_metrics = {
+            'dataset': args.custom_benchmark_name,
+            'accuracy': accuracy,
+            'f1': f1,
+            'precision': precision,
+            'recall': recall,
+            'roc_auc': roc_auc,
+            'balanced_acc': balanced_acc,
+            'mcc': mcc,
+            'kappa': kappa
+        }
+        results.append(custom_metrics)
+
+        print(f"  Accuracy: {custom_metrics['accuracy']:.2f}%")
         print(f"{'='*80}\n")
 
     # Create results DataFrame

@@ -73,9 +73,17 @@ Available models:
     parser.add_argument(
         '--dataset',
         type=str,
-        required=True,
+        required=False,
+        default='reh',
         choices=['reh', 'sup'],
-        help='Dataset to use (reh or sup)'
+        help='Dataset to use: reh or sup (default: reh). Ignored if --data is provided.'
+    )
+
+    parser.add_argument(
+        '--data',
+        type=str,
+        default=None,
+        help='Path to custom training data CSV. If provided, overrides --dataset. Format: cell_id, phase_label, gene1, gene2, ...'
     )
 
     # Output
@@ -144,7 +152,8 @@ Available models:
         selection_method=args.feature_selection,
         scaling_method=args.scaling,
         n_trials=args.trials,
-        outer_splits=args.cv
+        outer_splits=args.cv,
+        custom_data_path=args.data
     )
 
     print("\n" + "=" * 80)

@@ -189,21 +189,75 @@ def preprocess_rna_data(data, scaling_method, selection_method=None):
     return X_train_resampled, X_test_scaled, y_train_resampled, y_test, cell_ids_test, scaler, label_encoder
 
 
-def load_and_preprocess_data(scaling_method, is_reh=True, check_feature=False, selection_method=None):
+def load_custom_training_data(custom_data_path, scaling_method, selection_method=None):
     """
-    Loads and preprocesses the REH and SUP datasets (combined 80% + 20%).
+    Loads and preprocesses custom training data from user-provided CSV file.
 
-    EXACT implementation from 1_0_principle_aurelien_ml.py line 568-639
+    Expected CSV format:
+        - First column: cell_id (or gex_barcode)
+        - Second column: phase_label (must be 'G1', 'S', or 'G2M')
+        - Remaining columns: gene expression values
 
     Args:
-        scaling_method (str): Scaling method to use.
-        is_reh (bool): True for REH, False for SUP.
-        check_feature (bool): Whether to check feature overlap (not implemented here).
-        selection_method (str): Feature selection method.
+        custom_data_path (str): Path to custom training data CSV
+        scaling_method (str): Scaling method to use
+        selection_method (str): Feature selection method
 
     Returns:
         tuple: (X_train_resampled, X_test, y_train_resampled, y_test, cell_ids_test, scaler, label_encoder)
     """
+    print(f"\nLoading custom training data from: {custom_data_path}")
+
+    # Load custom data
+    data_custom = pd.read_csv(custom_data_path)
+
+    # Detect cell_id and phase_label columns
+    first_col = data_custom.columns[0]
+    second_col = data_custom.columns[1]
+
+    # Rename to standard format
+    data_custom.rename(columns={first_col: 'gex_barcode', second_col: 'Predicted'}, inplace=True)
+
+    print(f"  Loaded {len(data_custom)} cells")
+    print(f"  Features: {len(data_custom.columns) - 2} genes")
+    print(f"  Phase distribution: {data_custom['Predicted'].value_counts().to_dict()}")
+
+    # Validate phase labels
+    valid_phases = {'G1', 'S', 'G2M'}
+    unique_phases = set(data_custom['Predicted'].unique())
+    if not unique_phases.issubset(valid_phases):
+        raise ValueError(f"Invalid phase labels found: {unique_phases}. Must be one of {valid_phases}")
+
+    # Preprocess using existing function
+    X_train_resampled, X_test, y_train_resampled, y_test, cell_ids_test, scaler, label_encoder = preprocess_rna_data(
+        data_custom, scaling_method, selection_method
+    )
+
+    return X_train_resampled, X_test, y_train_resampled, y_test, cell_ids_test, scaler, label_encoder
+
+
+def load_and_preprocess_data(scaling_method, is_reh=True, check_feature=False, selection_method=None, custom_data_path=None):
+    """
+    Loads and preprocesses the REH and SUP datasets (combined 80% + 20%) OR custom data.
+
+    EXACT implementation from 1_0_principle_aurelien_ml.py line 568-639
+    Extended to support custom training data.
+
+    Args:
+        scaling_method (str): Scaling method to use.
+        is_reh (bool): True for REH, False for SUP (ignored if custom_data_path provided).
+        check_feature (bool): Whether to check feature overlap (not implemented here).
+        selection_method (str): Feature selection method.
+        custom_data_path (str, optional): Path to custom training CSV. If provided, uses custom data instead of REH/SUP.
+
+    Returns:
+        tuple: (X_train_resampled, X_test, y_train_resampled, y_test, cell_ids_test, scaler, label_encoder)
+    """
+    # If custom data path provided, use it
+    if custom_data_path is not None:
+        return load_custom_training_data(custom_data_path, scaling_method, selection_method)
+
+    # Otherwise, use default REH/SUP data
     # Paths to your processed RNA data files (dynamically find project root)
     import os
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -565,6 +619,70 @@ def load_buettner_mesc(scaler, check_feature=False):
     # Preprocess the benchmark data
     benchmark_features, benchmark_labels, benchmark_cell_ids = data_preprocess_GSE(
         data_buettner_benchmark, scaler, "Buettner_mESC", check_feature
+    )
+
+    return benchmark_features, benchmark_labels, benchmark_cell_ids
+
+
+def load_custom_benchmark(custom_benchmark_path, scaler, benchmark_name="CustomBenchmark", check_feature=False):
+    """
+    Loads and preprocesses custom benchmark data from user-provided CSV file.
+
+    Expected CSV format (same as training data):
+        - First column: cell_id (or gex_barcode)
+        - Second column: phase_label (must be 'G1', 'S', or 'G2M')
+        - Remaining columns: gene expression values
+
+    Args:
+        custom_benchmark_path (str): Path to custom benchmark CSV
+        scaler: Fitted scaler object
+        benchmark_name (str): Name for this benchmark (used in logging)
+        check_feature (bool): Whether to check feature overlap
+
+    Returns:
+        tuple: (benchmark_features, benchmark_labels, benchmark_cell_ids)
+    """
+    print(f"\nLoading custom benchmark data from: {custom_benchmark_path}")
+
+    # Load custom benchmark
+    data_custom_benchmark = pd.read_csv(custom_benchmark_path)
+
+    # Detect cell_id and phase_label columns
+    first_col = data_custom_benchmark.columns[0]
+    second_col = data_custom_benchmark.columns[1]
+
+    # Rename to standard format
+    data_custom_benchmark.rename(columns={first_col: 'gex_barcode', second_col: 'Predicted'}, inplace=True)
+
+    print(f"  Loaded {len(data_custom_benchmark)} cells")
+    print(f"  Features: {len(data_custom_benchmark.columns) - 2} genes")
+    print(f"  Phase distribution: {data_custom_benchmark['Predicted'].value_counts().to_dict()}")
+
+    # Validate phase labels
+    valid_phases = {'G1', 'S', 'G2M'}
+    unique_phases = set(data_custom_benchmark['Predicted'].unique())
+    if not unique_phases.issubset(valid_phases):
+        # Try to map common variations
+        phase_mapping = {
+            'G1': 'G1',
+            'S': 'S',
+            'G2': 'G2M',
+            'G2M': 'G2M',
+            'M': 'G2M'
+        }
+        data_custom_benchmark['Predicted'] = data_custom_benchmark['Predicted'].map(
+            lambda x: phase_mapping.get(x, x)
+        )
+        data_custom_benchmark = data_custom_benchmark.dropna(subset=['Predicted'])
+
+        # Validate again after mapping
+        unique_phases = set(data_custom_benchmark['Predicted'].unique())
+        if not unique_phases.issubset(valid_phases):
+            raise ValueError(f"Invalid phase labels found: {unique_phases}. Must be one of {valid_phases}")
+
+    # Preprocess the benchmark data
+    benchmark_features, benchmark_labels, benchmark_cell_ids = data_preprocess_GSE(
+        data_custom_benchmark, scaler, benchmark_name, check_feature
     )
 
     return benchmark_features, benchmark_labels, benchmark_cell_ids

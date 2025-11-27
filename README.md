@@ -241,6 +241,90 @@ python 4_interpretability/shap_analysis.py \
 
 ---
 
+## Using Custom Data
+
+The pipeline supports training and evaluation with your own datasets while keeping REH/SUP as defaults.
+
+### Custom Training Data
+
+**CSV Format Required:**
+```
+cell_id,phase_label,gene1,gene2,gene3,...
+CELL_001,G1,2.5,3.1,0.8,...
+CELL_002,S,1.2,4.5,2.1,...
+CELL_003,G2M,3.4,1.9,5.2,...
+```
+
+**Important:**
+- **First column**: Cell ID (any name)
+- **Second column**: Phase label (must be `G1`, `S`, or `G2M`)
+- **Remaining columns**: Gene expression values (normalized)
+
+**Train with Custom Data:**
+
+```bash
+# Deep Learning with custom data
+python 2_model_training/train_deep_learning.py \
+  --model simpledense \
+  --data /path/to/your_training_data.csv \
+  --output models/custom_model/ \
+  --trials 50 \
+  --cv 5
+
+# Traditional ML with custom data
+python 2_model_training/train_traditional_ml.py \
+  --model random_forest \
+  --data /path/to/your_training_data.csv \
+  --output models/custom_rf/ \
+  --trials 50
+```
+
+**Note:** When `--data` is provided, the `--dataset` argument (reh/sup) is ignored.
+
+### Custom Benchmark Data
+
+**Same CSV format as training data** (cell_id, phase_label, genes...)
+
+**Evaluate on Custom Benchmark:**
+
+```bash
+# Evaluate model on custom benchmark
+python 3_evaluation/evaluate_models.py \
+  --model_path models/saved_models/dnn3/dnn3_NFT_reh_fld_1.pt \
+  --custom_benchmark /path/to/your_benchmark.csv \
+  --custom_benchmark_name "MyBenchmark" \
+  --output results/custom_evaluation.csv
+
+# Combine standard + custom benchmarks
+python 3_evaluation/evaluate_models.py \
+  --model_path models/saved_models/dnn3/dnn3_NFT_reh_fld_1.pt \
+  --benchmarks GSE146773 GSE64016 \
+  --custom_benchmark /path/to/your_benchmark.csv \
+  --custom_benchmark_name "MyBenchmark"
+```
+
+**SHAP Analysis on Custom Benchmark:**
+
+```bash
+python 4_interpretability/run_shap_analysis.py \
+  --model_path models/saved_models/dnn3/dnn3_NFT_reh_fld_1.pt \
+  --custom_benchmark /path/to/your_benchmark.csv \
+  --custom_benchmark_name "MyBenchmark" \
+  --output_dir results/shap/custom/
+```
+
+### Data Preprocessing Tips
+
+1. **Normalization**: Use Seurat normalization (LogNormalize) or similar
+2. **Gene Selection**: Include only highly variable genes or marker genes
+3. **Phase Labels**: Must be exactly `G1`, `S`, or `G2M` (case-sensitive)
+4. **Missing Features**: Pipeline automatically handles gene mismatches by:
+   - Adding missing genes as zeros
+   - Dropping extra genes
+   - Reordering to match training features
+
+---
+
 ## Models
 
 ### Deep Learning Models
