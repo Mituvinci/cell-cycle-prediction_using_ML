@@ -29,8 +29,18 @@ This repository contains a modular, reproducible pipeline for predicting cell cy
 ### Benchmark Data (Ground Truth)
 - **GSE146773**: Human U-2 OS cells with FUCCI reporter
   - Download: [https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE146773](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE146773)
-- **GSE64016**: Mouse ESCs with FUCCI reporter
+- **GSE64016**: Human ESCs with FUCCI reporter
   - Download: [https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE64016](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE64016)
+- **Buettner mESC**: Mouse embryonic stem cells with ground-truth labels
+  - 182 single-cell RNA-seq profiles from mouse ESCs
+  - Cell cycle phases (G1, S, G2M) determined by Hoechst 33342 staining and FACS sorting
+  - ~9,570 expressed genes (raw counts) with Ensembl IDs and gene symbols
+  - Access via Bioconductor:
+    ```R
+    library(scRNAseq)
+    sce <- BuettnerESCData()
+    ```
+  - **Citation**: Buettner, F., Natarajan, K. N., Casale, F. P., et al. *Computational analysis of cell-to-cell heterogeneity in single-cell RNA-sequencing data reveals hidden subpopulations of cells.* Nature Biotechnology 33, 155–160 (2015).
 
 ---
 
