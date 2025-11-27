@@ -15,6 +15,14 @@ import torch.nn as nn
 import optuna
 from .training_utils import initialize_optimizer, init_weights
 
+# Import model classes at module level to avoid relative import issues
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from models.dense_models import SimpleDenseModel, DeepDenseModel
+from models.cnn_models import CNNModel
+from models.hybrid_models import HybridCNNDenseModel, FeatureEmbeddingModel
+
 
 def optimize_model_with_optuna(
     model_type,
@@ -52,13 +60,6 @@ def optimize_model_with_optuna(
         - optimizer: final optimizer
         - best_params: dictionary of best hyperparameters found by Optuna
     """
-    # Import model classes (need to be defined elsewhere or imported)
-    from ..models.dense_models import SimpleDenseModel, DeepDenseModel
-    from ..models.cnn_models import CNNModel
-    from ..models.hybrid_models import HybridCNNDenseModel, FeatureEmbeddingModel
-    # Enhanced models would be imported here when available
-    # from ..models.enhanced_models import Enhance_model, Enhance_model_with_attention
-
     # Model type constants
     enhancedense = "enhancedense"
     enhancedenseAttention = "edat"
@@ -84,7 +85,7 @@ def optimize_model_with_optuna(
         learning_rate = trial.suggest_float('learningrate', 1e-5, 1e-1, log=True)
         optimizer_name = trial.suggest_categorical('optimizer', ['Adam', 'RMSprop', 'SGD'])
         # Fixed epochs - early stopping will handle optimal stopping point
-        epochs = 1500  # Maximum epochs, early stopping will terminate earlier if needed
+        epochs = 100  # For testing (change to 1500 for full training)
 
         # Distinguish special models
         special_models = [enhancedense, enhancedenseAttention, featureembedding, hybridcnn, vae_pretrain]
@@ -201,6 +202,10 @@ def optimize_model_with_optuna(
     study.optimize(optuna_objective, n_trials=n_trials)
 
     best_params = study.best_params
+
+    # Manually add epochs (NOT optimized by Optuna - early stopping handles optimal epochs)
+    best_params['epochs'] = 100  # For testing (change to 1500 for full training)
+
     print(f"\nBest parameters for {model_type}: {best_params}")
 
     best_optimizer = initialize_optimizer(best_model, best_params['optimizer'], best_params['learningrate'])

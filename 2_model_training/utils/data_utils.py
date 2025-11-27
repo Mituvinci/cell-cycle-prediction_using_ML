@@ -167,19 +167,25 @@ def preprocess_rna_data(data, scaling_method, selection_method=None):
     X_train_resampled, y_train_resampled = undersample.fit_resample(X_train_resampled, y_train_resampled)
     """
 
-    # Step 7: Apply Scaling **BEFORE** ADASYN
+    # Step 7: Save column names before scaling (apply_scaling returns numpy array)
+    feature_columns = X_train.columns.tolist()
+
+    # Step 8: Apply Scaling **BEFORE** ADASYN
     X_train_scaled, scaler = apply_scaling(X_train, method=scaling_method)
     X_test_scaled = pd.DataFrame(scaler.transform(X_test), columns=X_test.columns)
 
-    # Step 8: Apply ADASYN (Adaptive Synthetic Sampling)
+    # Step 9: Apply ADASYN (Adaptive Synthetic Sampling)
     adasyn = ADASYN(sampling_strategy='auto', random_state=42, n_neighbors=5)
     X_train_resampled, y_train_resampled = adasyn.fit_resample(X_train_scaled, y_train_encoded)
 
-    # Step 9: Apply Cluster-Based Undersampling
+    # Step 10: Apply Cluster-Based Undersampling
     cluster_undersample = ClusterCentroids(sampling_strategy='auto', random_state=42)
     X_train_resampled, y_train_resampled = cluster_undersample.fit_resample(X_train_resampled, y_train_resampled)
 
-    # Step 10: Return Processed Data
+    # Step 11: Convert back to DataFrame (ADASYN/ClusterCentroids return numpy arrays)
+    X_train_resampled = pd.DataFrame(X_train_resampled, columns=feature_columns)
+
+    # Step 11: Return Processed Data
     return X_train_resampled, X_test_scaled, y_train_resampled, y_test, cell_ids_test, scaler, label_encoder
 
 
@@ -255,3 +261,310 @@ def load_and_preprocess_data(scaling_method, is_reh=True, check_feature=False, s
         )
 
     return X_train_resampled, X_test, y_train_resampled, y_test, cell_ids_test, scaler, label_encoder
+
+
+#######################################################
+#           BENCHMARK DATA LOADING FUNCTIONS          #
+#######################################################
+
+def scaling_benchmark(benchmark_data, scaler):
+    """
+    Applies scaling to benchmark data using a fitted scaler.
+
+    EXACT implementation from 1_0_principle_aurelien_ml.py line 327-352
+
+    Args:
+        benchmark_data (pd.DataFrame): Benchmark data to transform.
+        scaler: Fitted scaler object.
+
+    Returns:
+        pd.DataFrame: Scaled benchmark data
+    """
+    # Ensure benchmark data has the same feature order as scaler expects
+    expected_feature_order = scaler.feature_names_in_
+    benchmark_data = benchmark_data[expected_feature_order]
+
+    # Apply scaling
+    scaled_benchmark_data = scaler.transform(benchmark_data)
+
+    # Convert scaled data back to DataFrame
+    scaled_benchmark_data = pd.DataFrame(scaled_benchmark_data, columns=benchmark_data.columns)
+
+    return scaled_benchmark_data
+
+
+def preprocess_benchmark_data(data, title, check_feature=False):
+    """
+    Preprocesses a benchmark data file (basic preprocessing).
+
+    EXACT implementation from 1_0_principle_aurelien_ml.py line 644-676
+
+    Args:
+        data (pd.DataFrame): Raw benchmark data.
+        title (str): Dataset name for debugging.
+        check_feature (bool): Whether to check feature overlap (not implemented here).
+
+    Returns:
+        tuple: (X_labeled, y_labeled, cell_ids_labeled)
+    """
+    # Drop rows with NA in 'Predicted'
+    data_with_label = data.dropna(subset=['Predicted'])
+
+    # Identify non-numeric columns
+    non_numeric_cols = data_with_label.select_dtypes(include=['object', 'category']).columns
+
+    # Prepare the feature matrix (X) and labels (y)
+    y_labeled = data_with_label['Predicted'].reset_index(drop=True)
+    cell_ids_labeled = data_with_label['gex_barcode'].reset_index(drop=True)
+    X_labeled = data_with_label.drop(columns=non_numeric_cols).reset_index(drop=True)
+
+    # Replace special JSON characters in feature names
+    X_labeled.columns = [
+        col.replace('{', '').replace('}', '').replace(':', '') for col in X_labeled.columns
+    ]
+
+    return (X_labeled, y_labeled, cell_ids_labeled)
+
+
+def data_preprocess_GSE(data, scaler, dataset_name, check_feature=False):
+    """
+    Preprocesses a GSE benchmark data file.
+
+    Handles missing features by adding them as zeros.
+    Based on data_preprocess_GSE_local from 1_0_principle_aurelien_ml.py line 871-896
+
+    Args:
+        data (pd.DataFrame): Raw GSE data.
+        scaler: Fitted scaler object.
+        dataset_name (str): Dataset name.
+        check_feature (bool): Whether to check feature overlap.
+
+    Returns:
+        tuple: (X_labeled, y_labeled, cell_ids_labeled)
+               Processed features, labels, and cell IDs.
+    """
+    X_labeled, y_labeled, cell_ids_labeled = preprocess_benchmark_data(data, dataset_name, check_feature)
+
+    expected_features = scaler.feature_names_in_
+    current_features = X_labeled.columns
+
+    # Drop extra genes that are in benchmark but not in training
+    extra_features = [f for f in current_features if f not in expected_features]
+    if extra_features:
+        X_labeled = X_labeled.drop(columns=extra_features)
+
+    # Identify missing genes that are in training but not in benchmark
+    missing_features = [f for f in expected_features if f not in current_features]
+    if missing_features:
+        # Add missing features with zeros (using concat for performance)
+        missing_df = pd.DataFrame(0, index=X_labeled.index, columns=missing_features)
+        X_labeled = pd.concat([X_labeled, missing_df], axis=1)
+
+    # Reorder columns to match expected feature order
+    X_labeled = X_labeled[expected_features]
+
+    # Apply scaling
+    X_labeled = scaling_benchmark(X_labeled, scaler)
+
+    return X_labeled, y_labeled, cell_ids_labeled
+
+
+def load_reh_or_sup_benchmark(scaler, reh_sup="sup"):
+    """
+    Loads REH or SUP benchmark data.
+
+    EXACT implementation from 1_0_principle_aurelien_ml.py line 702-742
+
+    Args:
+        scaler: Fitted scaler object.
+        reh_sup (str): "reh" or "sup" to select dataset.
+
+    Returns:
+        tuple: (X_labeled, y_labeled, cell_ids_labeled)
+    """
+    import os
+
+    # Dynamically find project root
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    data_dir = os.path.join(project_root, "data")
+
+    if reh_sup == "reh":
+        path = os.path.join(
+            data_dir,
+            "filtered_normalized_gene_expression_cc_label1_GD428_21136_Hu_REH_Parental_overlapped_all_four_regions.csv"
+        )
+    else:
+        path = os.path.join(
+            data_dir,
+            "filtered_normalized_gene_expression_cc_label2_GD444_21136_Hu_Sup_Parental_overlapped_all_four_regions.csv"
+        )
+
+    # Load the RNA datasets
+    data = pd.read_csv(path)
+    data_with_label = data.dropna(subset=['Predicted'])
+
+    # Extract labels and cell IDs
+    y_labeled = data_with_label['Predicted'].reset_index(drop=True)
+    cell_ids_labeled = data_with_label['gex_barcode'].reset_index(drop=True)
+
+    # Remove non-numeric columns except 'Predicted'
+    non_numeric_cols = data_with_label.select_dtypes(include=['object', 'category']).columns
+    non_numeric_cols = [col for col in non_numeric_cols if col != 'Predicted']
+    data_with_label = data_with_label.drop(columns=non_numeric_cols)
+
+    # Drop the 'Predicted' column from features
+    X_labeled = data_with_label.drop(columns=['Predicted']).reset_index(drop=True)
+
+    # Clean up column names
+    X_labeled.columns = [
+        col.replace('{', '').replace('}', '').replace(':', '') for col in X_labeled.columns
+    ]
+
+    # Ensure that the return value is a DataFrame
+    X_labeled = pd.DataFrame(X_labeled, columns=data_with_label.drop(columns=['Predicted']).columns)
+    X_labeled = X_labeled[scaler.feature_names_in_]
+    X_labeled = scaling_benchmark(X_labeled, scaler)
+
+    return X_labeled, y_labeled, cell_ids_labeled
+
+
+def load_gse146773(scaler, check_feature=False):
+    """
+    Loads and preprocesses the GSE146773 benchmark data.
+
+    EXACT implementation from 1_0_principle_aurelien_ml.py line 745-786
+
+    Args:
+        scaler: Fitted scaler object.
+        check_feature (bool): Whether to check feature overlap.
+
+    Returns:
+        tuple: (benchmark_features, benchmark_labels, benchmark_cell_ids)
+    """
+    import os
+    from collections import Counter
+
+    # Use absolute path to benchmark data
+    data_dir = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/Training_data/Benchmark_data"
+
+    path_gse_benchmark = os.path.join(
+        data_dir,
+        "GSE146773_seurat_normalized_gene_expression.csv"
+    )
+    data_gse_benchmark = pd.read_csv(path_gse_benchmark)
+
+    # Rename columns to keep consistent naming
+    data_gse_benchmark.rename(columns={'paper_phase': 'Predicted', 'cell': 'gex_barcode'}, inplace=True)
+
+    data_gse_benchmark['Predicted'] = data_gse_benchmark['Predicted'].str.replace(
+        r'^S.*', 'S', regex=True
+    )
+    data_gse_benchmark = data_gse_benchmark.dropna(subset=['Predicted'])
+
+    # Preprocess the benchmark data
+    benchmark_features, benchmark_labels, benchmark_cell_ids = data_preprocess_GSE(
+        data_gse_benchmark, scaler, "GSE146773", check_feature
+    )
+
+    return benchmark_features, benchmark_labels, benchmark_cell_ids
+
+
+def load_gse64016(scaler, check_feature=False):
+    """
+    Loads and preprocesses the GSE64016 benchmark data.
+
+    EXACT implementation from 1_0_principle_aurelien_ml.py line 789-842
+
+    Args:
+        scaler: Fitted scaler object.
+        check_feature (bool): Whether to check feature overlap.
+
+    Returns:
+        tuple: (benchmark_features, benchmark_labels, benchmark_cell_ids)
+    """
+    import os
+    from collections import Counter
+
+    # Use absolute path to benchmark data
+    data_dir = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/Training_data/Benchmark_data"
+
+    path_gse_benchmark = os.path.join(
+        data_dir,
+        "GSE64016_seurat_normalized_gene_expression.csv"
+    )
+    data_gse_benchmark = pd.read_csv(path_gse_benchmark)
+
+    # Rename columns to keep consistent naming
+    data_gse_benchmark.rename(columns={'Labeled': 'Predicted'}, inplace=True)
+
+    # Remove rows where 'Predicted' starts with 'H1'
+    data_gse_benchmark = data_gse_benchmark[
+        ~data_gse_benchmark['Predicted'].str.startswith('H1')
+    ]
+
+    # Replace 'Predicted' values based on their prefixes
+    data_gse_benchmark['Predicted'] = data_gse_benchmark['Predicted'].str.replace(
+        r'^G2.*', 'G2M', regex=True
+    )
+    data_gse_benchmark['Predicted'] = data_gse_benchmark['Predicted'].str.replace(
+        r'^G1.*', 'G1', regex=True
+    )
+    data_gse_benchmark['Predicted'] = data_gse_benchmark['Predicted'].str.replace(
+        r'^S.*', 'S', regex=True
+    )
+
+    # Preprocess the benchmark data
+    benchmark_features, benchmark_labels, benchmark_cell_ids = data_preprocess_GSE(
+        data_gse_benchmark, scaler, "GSE64016", check_feature
+    )
+
+    return benchmark_features, benchmark_labels, benchmark_cell_ids
+
+
+def load_buettner_mesc(scaler, check_feature=False):
+    """
+    Loads and preprocesses the Buettner mESC benchmark data.
+
+    Args:
+        scaler: Fitted scaler object.
+        check_feature (bool): Whether to check feature overlap.
+
+    Returns:
+        tuple: (benchmark_features, benchmark_labels, benchmark_cell_ids)
+    """
+    import os
+    from collections import Counter
+
+    # Use absolute path to benchmark data
+    data_dir = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/Training_data/Benchmark_data"
+
+    path_buettner_benchmark = os.path.join(
+        data_dir,
+        "Buettner_mESC_SeuratNormalized_ML_ready.csv"
+    )
+    data_buettner_benchmark = pd.read_csv(path_buettner_benchmark)
+
+    # Rename columns to keep consistent naming
+    data_buettner_benchmark.rename(columns={'Phase': 'Predicted', 'Cell_ID': 'gex_barcode'}, inplace=True)
+
+    # Standardize phase labels (if needed)
+    # Map common variations to standard G1, S, G2M format
+    phase_mapping = {
+        'G1': 'G1',
+        'S': 'S',
+        'G2': 'G2M',
+        'G2M': 'G2M',
+        'M': 'G2M'
+    }
+
+    data_buettner_benchmark['Predicted'] = data_buettner_benchmark['Predicted'].map(
+        lambda x: phase_mapping.get(x, x)
+    )
+    data_buettner_benchmark = data_buettner_benchmark.dropna(subset=['Predicted'])
+
+    # Preprocess the benchmark data
+    benchmark_features, benchmark_labels, benchmark_cell_ids = data_preprocess_GSE(
+        data_buettner_benchmark, scaler, "Buettner_mESC", check_feature
+    )
+
+    return benchmark_features, benchmark_labels, benchmark_cell_ids

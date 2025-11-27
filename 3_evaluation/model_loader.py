@@ -110,16 +110,29 @@ def load_model_components(model_path):
     """
     Load a trained model, its scaler, label encoder, and selected features.
 
-    EXACT implementation from 3_0_principle_aurelien_ml_evaluate.py line 964-1003
+    Supports both Deep Learning (.pt) and Traditional ML (.joblib) models.
 
     Args:
-        model_path (str): Full path to the .pt model file
+        model_path (str): Full path to the model file (.pt or .joblib)
 
     Returns:
         tuple: (model, scaler, label_encoder, selected_features)
+               For TML models, returns (model, scaler, label_encoder, selected_features)
+               For DL models, returns (model, scaler, label_encoder, selected_features)
     """
     model_dir = os.path.dirname(model_path)
-    model_prefix = os.path.basename(model_path).replace(".pt", "")
+
+    # Determine model type from extension
+    if model_path.endswith('.joblib'):
+        # Traditional ML model
+        model_prefix = os.path.basename(model_path).replace(".joblib", "")
+        is_tml = True
+    elif model_path.endswith('.pt'):
+        # Deep Learning model
+        model_prefix = os.path.basename(model_path).replace(".pt", "")
+        is_tml = False
+    else:
+        raise ValueError(f"Unsupported model format: {model_path}. Use .pt or .joblib")
 
     # Locate required files
     scaler_path = os.path.join(model_dir, f"{model_prefix}_standard_scl.pkl")
@@ -148,11 +161,17 @@ def load_model_components(model_path):
     print(f"Loading model type: {model_type}")
     print(f"Hyperparameters: {hyperparams}")
 
-    # Build and load model
-    model = build_model(model_type, len(selected_features), hyperparams)
-    model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
-    model.to(device)
-    model.eval()
+    if is_tml:
+        # Load Traditional ML model (joblib)
+        model = joblib.load(model_path)
+        print(f"✓ Loaded TML model: {model_type}")
+    else:
+        # Build and load Deep Learning model
+        model = build_model(model_type, len(selected_features), hyperparams)
+        model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
+        model.to(device)
+        model.eval()
+        print(f"✓ Loaded DL model: {model_type}")
 
     return model, scaler, label_encoder, selected_features
 

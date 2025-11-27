@@ -44,8 +44,9 @@ data/
 !requirements.txt
 !environment.yml
 
-# SLURM files
+# SLURM and shell script files
 *.slurm
+*.sh
 slurm-*.out
 slurm-*.err
 

@@ -47,14 +47,16 @@ def preprocess_benchmark_data_fusion(scaler, selected_features, label_encoder, d
     """
     from torch.utils.data import DataLoader, TensorDataset
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../2_model_training'))
-    from utils.data_utils import load_reh_or_sup_benchmark, load_gse14773, load_gse64016
+    from utils.data_utils import load_reh_or_sup_benchmark, load_gse146773, load_gse64016, load_buettner_mesc
 
     if dataset_name == "SUP":
         benchmark_features, benchmark_labels, _ = load_reh_or_sup_benchmark(scaler, reh_sup="sup")
     elif dataset_name == "GSE146773":
-        benchmark_features, benchmark_labels, _ = load_gse14773(scaler, False)
+        benchmark_features, benchmark_labels, _ = load_gse146773(scaler, False)
     elif dataset_name == "GSE64016":
         benchmark_features, benchmark_labels, _ = load_gse64016(scaler, False)
+    elif dataset_name == "Buettner_mESC" or dataset_name == "BUETTNER":
+        benchmark_features, benchmark_labels, _ = load_buettner_mesc(scaler, False)
     else:
         raise ValueError(f"Invalid dataset name: {dataset_name}")
 
@@ -242,3 +244,72 @@ def decision_level_fusion(models, dataset_name):
         benchmark_labels_encoded.cpu().numpy(), final_predictions
     )
     return final_df
+
+
+def main():
+    import argparse
+    import glob
+
+    parser = argparse.ArgumentParser(description='Ensemble fusion for deep learning models')
+    parser.add_argument('--fusion_type', type=str, required=True, choices=['score', 'decision'],
+                        help='Fusion type: score (average probabilities) or decision (majority voting)')
+    parser.add_argument('--top_k', type=int, default=3, help='Number of top models to use')
+    parser.add_argument('--model_dirs', type=str, nargs='+', required=True,
+                        help='List of model directories containing .pt files')
+    parser.add_argument('--benchmark_data', type=str, required=True,
+                        help='Path to benchmark data CSV file')
+    parser.add_argument('--ground_truth', type=str, required=True,
+                        help='Path to ground truth labels CSV file')
+    parser.add_argument('--output', type=str, required=True, help='Output CSV file path')
+
+    args = parser.parse_args()
+
+    # Find all .pt files in model directories
+    model_paths = []
+    for model_dir in args.model_dirs:
+        pt_files = glob.glob(os.path.join(model_dir, "*.pt"))
+        if pt_files:
+            model_paths.append(pt_files[0])  # Use first .pt file in directory
+
+    # Limit to top_k models
+    model_paths = model_paths[:args.top_k]
+
+    # Determine dataset name from benchmark_data path
+    if 'GSE146773' in args.benchmark_data:
+        dataset_name = 'GSE146773'
+    elif 'GSE64016' in args.benchmark_data:
+        dataset_name = 'GSE64016'
+    elif 'SUP' in args.benchmark_data:
+        dataset_name = 'SUP'
+    else:
+        raise ValueError(f"Cannot determine dataset name from: {args.benchmark_data}")
+
+    print(f"\n{'='*80}")
+    print(f"ENSEMBLE FUSION: {args.fusion_type.upper()}")
+    print(f"{'='*80}")
+    print(f"Top-{args.top_k} models:")
+    for i, model_path in enumerate(model_paths, 1):
+        print(f"  {i}. {os.path.basename(model_path)}")
+    print(f"Benchmark: {dataset_name}")
+    print(f"Benchmark Data: {args.benchmark_data}")
+    print(f"Ground Truth: {args.ground_truth}")
+    print(f"Output: {args.output}")
+    print(f"{'='*80}\n")
+
+    # Run fusion
+    if args.fusion_type == 'score':
+        results_df = score_level_fusion(model_paths, dataset_name)
+    else:
+        results_df = decision_level_fusion(model_paths, dataset_name)
+
+    # Save results
+    os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    results_df.to_csv(args.output, index=False)
+
+    print(f"\n{'='*80}")
+    print(f"✅ Results saved to: {args.output}")
+    print(f"{'='*80}\n")
+
+
+if __name__ == "__main__":
+    main()

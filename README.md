@@ -165,34 +165,50 @@ python 2_model_training/train_traditional_ml.py \
 ### 3. Evaluate Models on Benchmark Data
 
 ```bash
-# Evaluate single model
+# Evaluate Deep Learning model on all benchmarks
 python 3_evaluation/evaluate_models.py \
-  --model_dir models/saved_models/dnn3/fold_0/ \
-  --benchmark_data data/processed/GSE146773_preprocessed.csv \
-  --ground_truth data/processed/GSE146773_ground_truth.csv \
-  --output results/dnn3_gse146773_evaluation.csv
+  --model_path models/saved_models/dnn3/dnn3_NFT_reh_fld_1.pt \
+  --benchmarks SUP GSE146773 GSE64016 \
+  --output results/dnn3_all_benchmarks.csv
+
+# Evaluate Traditional ML model on all benchmarks
+python 3_evaluation/evaluate_models.py \
+  --model_path models/saved_models/random_forest/rf_NFT_reh_fld_1.joblib \
+  --benchmarks SUP GSE146773 GSE64016 \
+  --output results/rf_all_benchmarks.csv
+
+# Evaluate on specific benchmarks only
+python 3_evaluation/evaluate_models.py \
+  --model_path models/saved_models/dnn3/dnn3_NFT_reh_fld_1.pt \
+  --benchmarks GSE146773 \
+  --output results/dnn3_gse146773_only.csv
 ```
 
 ### 4. Ensemble Methods
 
-```bash
-# Top-3 Deep Learning Score Fusion
-python 3_evaluation/ensemble_fusion.py \
-  --fusion_type score \
-  --top_k 3 \
-  --model_dirs models/saved_models/dnn3/fold_0/ models/saved_models/dnn5/fold_0/ models/saved_models/cnn/fold_0/ \
-  --benchmark_data data/processed/GSE146773_preprocessed.csv \
-  --ground_truth data/processed/GSE146773_ground_truth.csv \
-  --output results/ensemble_top3_score.csv
+Ensemble fusion is implemented in `3_evaluation/ensemble_fusion.py` with two methods:
+- **Score Fusion**: Averages predicted probabilities across models
+- **Decision Fusion**: Majority voting across model predictions
 
-# Top-5 Deep Learning Decision Fusion
-python 3_evaluation/ensemble_fusion.py \
-  --fusion_type decision \
-  --top_k 5 \
-  --model_dirs models/saved_models/dnn3/fold_0/ models/saved_models/dnn5/fold_0/ models/saved_models/cnn/fold_0/ models/saved_models/hybrid/fold_0/ models/saved_models/feature_embedding/fold_0/ \
-  --benchmark_data data/processed/GSE146773_preprocessed.csv \
-  --ground_truth data/processed/GSE146773_ground_truth.csv \
-  --output results/ensemble_top5_decision.csv
+Example usage (call the functions directly in Python):
+
+```python
+from ensemble_fusion import score_level_fusion, decision_level_fusion
+
+# Top-3 models
+model_paths = [
+    "models/saved_models/dnn3/dnn3_NFT_reh_fld_1.pt",
+    "models/saved_models/dnn5/dnn5_NFT_reh_fld_2.pt",
+    "models/saved_models/cnn/cnn_NFT_reh_fld_3.pt"
+]
+
+# Score fusion on GSE146773
+result_score = score_level_fusion(model_paths, "GSE146773")
+result_score.to_csv("results/top3_score_gse146773.csv", index=False)
+
+# Decision fusion on GSE64016
+result_decision = decision_level_fusion(model_paths, "GSE64016")
+result_decision.to_csv("results/top3_decision_gse64016.csv", index=False)
 ```
 
 ### 5. SHAP Interpretability Analysis

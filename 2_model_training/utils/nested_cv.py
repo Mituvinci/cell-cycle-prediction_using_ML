@@ -61,7 +61,8 @@ def perform_nested_cv_dn(
         cv (int): Number of cross-validation folds. Defaults to 5.
 
     Note:
-        Training uses fixed max_epochs=1500 with early_stopping_patience=100.
+        Training uses fixed max_epochs=100 with early_stopping_patience=100 (for testing).
+        Change to max_epochs=1500 in optuna_utils.py for full training.
         Optuna optimizes learning_rate, optimizer, and model architecture parameters.
     """
     # Create the directory if it doesn't exist

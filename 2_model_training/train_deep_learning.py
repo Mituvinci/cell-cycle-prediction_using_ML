@@ -52,7 +52,8 @@ Examples:
   python train_deep_learning.py --model deepdense --dataset sup --feature-selection ElasticCV --output ./models/DNN5/
 
 Note:
-  Training uses max_epochs=1500 with early_stopping_patience=100.
+  Training uses max_epochs=100 with early_stopping_patience=100 (for testing).
+  Change epochs=100 to epochs=1500 in utils/optuna_utils.py for full training.
   Optuna optimizes learning_rate, optimizer, and architecture parameters.
 
 Available models:
@@ -136,7 +137,8 @@ Available models:
     print(f"Feature Selection: {args.feature_selection if args.feature_selection else 'None'}")
     print(f"Scaling Method: {args.scaling}")
     print(f"Optuna Trials: {args.trials}")
-    print(f"Max Epochs: 1500 (with early stopping patience=100)")
+    print(f"Max Epochs: 100 (testing mode - change to 1500 for full training)")
+    print(f"Early Stopping Patience: 100")
     print(f"Cross-Validation Folds: {args.cv}")
     print("=" * 80)
     print()

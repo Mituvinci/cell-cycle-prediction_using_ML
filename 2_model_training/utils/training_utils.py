@@ -313,7 +313,11 @@ def evaluate_model(model, data_loader, criterion, label_encoder, save_dir, datas
     plt.close()
 
 
-    return accuracy, test_loss, f1.cpu().item(), precision.cpu().item(), recall.cpu().item(), roc_auc.cpu().item(), balanced_acc, mcc, kappa, cm_plot_path, np.array(y_pred_proba), report_df
+    return (
+        accuracy, test_loss * 100.0, f1.cpu().item() * 100.0, precision.cpu().item() * 100.0,
+        recall.cpu().item() * 100.0, roc_auc.cpu().item() * 100.0, balanced_acc * 100.0, mcc,
+        kappa, cm_plot_path, np.array(y_pred_proba), report_df
+    )
 
 
 def initialize_optimizer(model, optimizer_name, learning_rate):
