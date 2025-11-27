@@ -122,54 +122,56 @@ pip install -r requirements.txt
 ### 1. Train Deep Learning Models
 
 ```bash
-# Train DNN3 (top performer) with nested CV
+# Train DNN3 (SimpleDense - top performer) on REH data
 python 2_model_training/train_deep_learning.py \
-  --model dnn3 \
-  --data data/processed/consensus_labels.csv \
-  --n_trials 50 \
-  --outer_folds 5 \
-  --inner_folds 3 \
-  --feature_selection none \
-  --output_dir models/saved_models/dnn3/
+  --model simpledense \
+  --dataset reh \
+  --output models/saved_models/dnn3/ \
+  --trials 50 \
+  --cv 5
 
-# Train with different architecture
+# Train DNN5 (DeepDense) on SUP data
 python 2_model_training/train_deep_learning.py \
-  --model dnn5 \
-  --n_trials 30 \
-  --outer_folds 5 \
-  --inner_folds 3 \
-  --output_dir models/saved_models/dnn5/
+  --model deepdense \
+  --dataset sup \
+  --output models/saved_models/dnn5/ \
+  --trials 30 \
+  --cv 5
 
-# Train CNN model
+# Train CNN model (dataset defaults to reh)
 python 2_model_training/train_deep_learning.py \
   --model cnn \
-  --n_trials 50 \
-  --output_dir models/saved_models/cnn/
+  --output models/saved_models/cnn/ \
+  --trials 50 \
+  --cv 5
 ```
 
 ### 2. Train Traditional ML Models
 
 ```bash
-# Train Random Forest
+# Train Random Forest on REH data
 python 2_model_training/train_traditional_ml.py \
   --model random_forest \
-  --data data/processed/consensus_labels.csv \
-  --n_trials 50 \
-  --outer_folds 5 \
-  --inner_folds 3 \
-  --output_dir models/saved_models/random_forest/
+  --dataset reh \
+  --output models/saved_models/random_forest/ \
+  --trials 50 \
+  --cv 5
 
-# Train LightGBM
+# Train LightGBM on SUP data
 python 2_model_training/train_traditional_ml.py \
   --model lgbm \
-  --n_trials 50 \
-  --output_dir models/saved_models/lgbm/
+  --dataset sup \
+  --output models/saved_models/lgbm/ \
+  --trials 50 \
+  --cv 5
 
-# Train Ensemble (VotingClassifier)
+# Train Ensemble (VotingClassifier: AdaBoost + RF + LGBM)
 python 2_model_training/train_traditional_ml.py \
   --model ensemble \
-  --n_trials 50 \
-  --output_dir models/saved_models/ensemble_tml/
+  --dataset reh \
+  --output models/saved_models/ensemble_tml/ \
+  --trials 50 \
+  --cv 5
 ```
 
 ### 3. Evaluate Models on Benchmark Data
