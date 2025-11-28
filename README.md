@@ -144,6 +144,14 @@ python 2_model_training/train_deep_learning.py \
   --output models/saved_models/cnn/ \
   --trials 50 \
   --cv 5
+
+# Train with CUSTOM training data (your own CSV)
+python 2_model_training/train_deep_learning.py \
+  --model simpledense \
+  --data /path/to/your_training_data.csv \
+  --output models/custom_model/ \
+  --trials 50 \
+  --cv 5
 ```
 
 ### 2. Train Traditional ML Models
@@ -172,6 +180,14 @@ python 2_model_training/train_traditional_ml.py \
   --output models/saved_models/ensemble_tml/ \
   --trials 50 \
   --cv 5
+
+# Train with CUSTOM training data (your own CSV)
+python 2_model_training/train_traditional_ml.py \
+  --model random_forest \
+  --data /path/to/your_training_data.csv \
+  --output models/custom_rf/ \
+  --trials 50 \
+  --cv 5
 ```
 
 ### 3. Evaluate Models on Benchmark Data
@@ -194,6 +210,13 @@ python 3_evaluation/evaluate_models.py \
   --model_path models/saved_models/dnn3/dnn3_NFT_reh_fld_1.pt \
   --benchmarks GSE146773 \
   --output results/dnn3_gse146773_only.csv
+
+# Evaluate on CUSTOM benchmark data (your own CSV with ground truth)
+python 3_evaluation/evaluate_models.py \
+  --model_path models/saved_models/dnn3/dnn3_NFT_reh_fld_1.pt \
+  --custom_benchmark /path/to/your_benchmark.csv \
+  --custom_benchmark_name "MyBenchmark" \
+  --output results/dnn3_custom_benchmark.csv
 ```
 
 ### 4. Ensemble Methods
@@ -226,19 +249,24 @@ result_decision.to_csv("results/top3_decision_gse64016.csv", index=False)
 ### 5. SHAP Interpretability Analysis
 
 ```bash
-# SHAP analysis for DNN3
-python 4_interpretability/shap_analysis.py \
-  --model_dir models/saved_models/dnn3/fold_0/ \
-  --data data/processed/consensus_labels.csv \
-  --model_type deep_learning \
+# SHAP analysis for DNN3 on GSE146773 benchmark (default)
+python 4_interpretability/run_shap_analysis.py \
+  --model_path models/saved_models/dnn3/dnn3_NFT_reh_fld_1.pt \
+  --benchmark GSE146773 \
   --output_dir results/shap/dnn3/
 
-# SHAP analysis for Random Forest
-python 4_interpretability/shap_analysis.py \
-  --model_dir models/saved_models/random_forest/fold_0/ \
-  --data data/processed/consensus_labels.csv \
-  --model_type traditional_ml \
+# SHAP analysis for Random Forest on GSE64016 benchmark
+python 4_interpretability/run_shap_analysis.py \
+  --model_path models/saved_models/random_forest/rf_NFT_reh_fld_1.joblib \
+  --benchmark GSE64016 \
   --output_dir results/shap/random_forest/
+
+# SHAP analysis on CUSTOM benchmark data
+python 4_interpretability/run_shap_analysis.py \
+  --model_path models/saved_models/dnn3/dnn3_NFT_reh_fld_1.pt \
+  --custom_benchmark /path/to/your_benchmark.csv \
+  --custom_benchmark_name "MyBenchmark" \
+  --output_dir results/shap/custom/
 ```
 
 ---
