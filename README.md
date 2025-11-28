@@ -71,8 +71,8 @@ See `DATA_STANDARDIZATION_SUMMARY.md` for complete documentation.
 ### Training Data (Default)
 - **REH and SUP-B15**: Human leukemia cell lines (10x Chromium Multiome)
 - **Download**: [GSE293316](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE293316)
--**PBMCs from a Healthy Donor: Whole Transcriptome Analysis Human scRNA 10x Chrmium **: https://www.10xgenomics.com/datasets/pbm-cs-from-a-healthy-donor-whole-transcriptome-analysis-3-1-standard-4-0-0
--**10k Brain Cells from an E18 Mouse (v3 chemistry) Mouse  scRNA 10x Chrmium **: https://www.10xgenomics.com/datasets/10-k-brain-cells-from-an-e-18-mouse-v-3-chemistry-3-standard-3-0-0
+- **PBMCs from a Healthy Donor: Whole Transcriptome Analysis Human scRNA 10x Chrmium**: https://www.10xgenomics.com/datasets/pbm-cs-from-a-healthy-donor-whole-transcriptome-analysis-3-1-standard-4-0-0
+- **10k Brain Cells from an E18 Mouse (v3 chemistry) Mouse  scRNA 10x Chrmium**: https://www.10xgenomics.com/datasets/10-k-brain-cells-from-an-e-18-mouse-v-3-chemistry-3-standard-3-0-0
 
 
 ### Benchmark Data (Ground Truth)
