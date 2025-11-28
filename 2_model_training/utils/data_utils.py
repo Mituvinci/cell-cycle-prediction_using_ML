@@ -23,6 +23,42 @@ from imblearn.over_sampling import SMOTE, ADASYN
 from imblearn.under_sampling import RandomUnderSampler, ClusterCentroids
 
 
+def capitalize_gene_names(df, exclude_cols=['gex_barcode', 'Predicted', 'Cell_ID', 'cell', 'phase', 'Phase']):
+    """
+    Capitalizes all gene names in a DataFrame (first letter uppercase, rest lowercase).
+
+    This ensures species-independent gene naming:
+    - Mouse genes: Gnai3, Pbsn, Cdc45
+    - Human genes: Gapdh, Actb, Tp53
+
+    Parameters:
+    -----------
+    df : pd.DataFrame
+        DataFrame with gene columns
+    exclude_cols : list
+        Columns to exclude from capitalization (metadata columns)
+
+    Returns:
+    --------
+    pd.DataFrame
+        DataFrame with capitalized gene names
+    """
+    # Create a mapping of old names to capitalized names
+    rename_dict = {}
+    for col in df.columns:
+        if col not in exclude_cols:
+            # Capitalize: first letter uppercase, rest lowercase
+            capitalized = col.capitalize()
+            if capitalized != col:
+                rename_dict[col] = capitalized
+
+    # Rename columns
+    if rename_dict:
+        df = df.rename(columns=rename_dict)
+
+    return df
+
+
 def apply_scaling(X, method='standard', scaler=None):
     """
     Apply feature scaling to the data.
@@ -218,6 +254,9 @@ def load_custom_training_data(custom_data_path, scaling_method, selection_method
     # Rename to standard format
     data_custom.rename(columns={first_col: 'gex_barcode', second_col: 'Predicted'}, inplace=True)
 
+    # Capitalize all gene names for species independence
+    data_custom = capitalize_gene_names(data_custom)
+
     print(f"  Loaded {len(data_custom)} cells")
     print(f"  Features: {len(data_custom.columns) - 2} genes")
     print(f"  Phase distribution: {data_custom['Predicted'].value_counts().to_dict()}")
@@ -275,6 +314,10 @@ def load_and_preprocess_data(scaling_method, is_reh=True, check_feature=False, s
     # Load the RNA datasets
     data_reh = pd.read_csv(path_reh)
     data_sup = pd.read_csv(path_sup)
+
+    # Capitalize all gene names for species independence
+    data_reh = capitalize_gene_names(data_reh)
+    data_sup = capitalize_gene_names(data_sup)
 
     # Find common features between REH and SUP
     training_features_set = set(data_reh.columns) & set(data_sup.columns)
@@ -455,6 +498,10 @@ def load_reh_or_sup_benchmark(scaler, reh_sup="sup"):
 
     # Load the RNA datasets
     data = pd.read_csv(path)
+
+    # Capitalize all gene names for species independence
+    data = capitalize_gene_names(data)
+
     data_with_label = data.dropna(subset=['Predicted'])
 
     # Extract labels and cell IDs
@@ -510,6 +557,9 @@ def load_gse146773(scaler, check_feature=False):
     # Rename columns to keep consistent naming
     data_gse_benchmark.rename(columns={'paper_phase': 'Predicted', 'cell': 'gex_barcode'}, inplace=True)
 
+    # Capitalize all gene names for species independence
+    data_gse_benchmark = capitalize_gene_names(data_gse_benchmark)
+
     data_gse_benchmark['Predicted'] = data_gse_benchmark['Predicted'].str.replace(
         r'^S.*', 'S', regex=True
     )
@@ -551,6 +601,9 @@ def load_gse64016(scaler, check_feature=False):
     # Rename columns to keep consistent naming
     data_gse_benchmark.rename(columns={'Labeled': 'Predicted'}, inplace=True)
 
+    # Capitalize all gene names for species independence
+    data_gse_benchmark = capitalize_gene_names(data_gse_benchmark)
+
     # Remove rows where 'Predicted' starts with 'H1'
     data_gse_benchmark = data_gse_benchmark[
         ~data_gse_benchmark['Predicted'].str.startswith('H1')
@@ -590,16 +643,36 @@ def load_buettner_mesc(scaler, check_feature=False):
     from collections import Counter
 
     # Use absolute path to benchmark data
-    data_dir = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/Training_data/Benchmark_data"
+    data_dir = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data"
 
+    # Use cleaned benchmark data (without embedded Phase column)
     path_buettner_benchmark = os.path.join(
         data_dir,
-        "Buettner_mESC_SeuratNormalized_ML_ready.csv"
+        "Buettner_mESC_benchmark_clean.csv"
     )
+
+    # Load metadata for ground truth labels
+    path_buettner_metadata = os.path.join(
+        data_dir,
+        "Buettner_mESC_metadata.csv"
+    )
+
+    # Load expression data and metadata
     data_buettner_benchmark = pd.read_csv(path_buettner_benchmark)
+    metadata = pd.read_csv(path_buettner_metadata)
+
+    # Merge with metadata to get ground truth labels
+    data_buettner_benchmark = data_buettner_benchmark.merge(
+        metadata[['Cell_ID', 'Phase']],
+        on='Cell_ID',
+        how='left'
+    )
 
     # Rename columns to keep consistent naming
     data_buettner_benchmark.rename(columns={'Phase': 'Predicted', 'Cell_ID': 'gex_barcode'}, inplace=True)
+
+    # Capitalize all gene names for species independence
+    data_buettner_benchmark = capitalize_gene_names(data_buettner_benchmark)
 
     # Standardize phase labels (if needed)
     # Map common variations to standard G1, S, G2M format
@@ -653,6 +726,9 @@ def load_custom_benchmark(custom_benchmark_path, scaler, benchmark_name="CustomB
 
     # Rename to standard format
     data_custom_benchmark.rename(columns={first_col: 'gex_barcode', second_col: 'Predicted'}, inplace=True)
+
+    # Capitalize all gene names for species independence
+    data_custom_benchmark = capitalize_gene_names(data_custom_benchmark)
 
     print(f"  Loaded {len(data_custom_benchmark)} cells")
     print(f"  Features: {len(data_custom_benchmark.columns) - 2} genes")
