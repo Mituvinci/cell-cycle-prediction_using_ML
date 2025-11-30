@@ -64,6 +64,13 @@ docs/
 *.md
 !README.md
 
+# Manuscript and review files
+All_Reveiwers' comments_ScholarOne Manuscripts._BiB_CCP.pdf
+CLAUDE.md
+manuscript_revised_6921_words_7152025_HA.docx
+supplementaries_7_15_2025.docx
+README.md.backup
+
 # Logs
 *.log
 logs/
