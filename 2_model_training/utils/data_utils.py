@@ -247,23 +247,35 @@ def load_custom_training_data(custom_data_path, scaling_method, selection_method
     # Load custom data
     data_custom = pd.read_csv(custom_data_path)
 
-    # Detect cell_id and phase_label columns
-    first_col = data_custom.columns[0]
-    second_col = data_custom.columns[1]
+    # Check if data already has standard column names (from merged training data)
+    if 'gex_barcode' in data_custom.columns and 'Predicted' in data_custom.columns:
+        # Data is already in correct format (merged training data)
+        print(f"  Detected merged training data format")
+    else:
+        # Data needs column renaming (simple custom format: cell_id, phase_label, genes...)
+        first_col = data_custom.columns[0]
+        second_col = data_custom.columns[1]
 
-    # Rename to standard format
-    data_custom.rename(columns={first_col: 'gex_barcode', second_col: 'Predicted'}, inplace=True)
+        # Rename to standard format
+        data_custom.rename(columns={first_col: 'gex_barcode', second_col: 'Predicted'}, inplace=True)
+        print(f"  Renamed columns: {first_col} → gex_barcode, {second_col} → Predicted")
 
     # Capitalize all gene names for species independence
     data_custom = capitalize_gene_names(data_custom)
 
     print(f"  Loaded {len(data_custom)} cells")
-    print(f"  Features: {len(data_custom.columns) - 2} genes")
-    print(f"  Phase distribution: {data_custom['Predicted'].value_counts().to_dict()}")
+    print(f"  Features: {len(data_custom.columns) - 2} genes (excluding gex_barcode, Predicted)")
+
+    # Get phase distribution (ensure it's a Series)
+    phase_series = data_custom['Predicted']
+    if isinstance(phase_series, pd.DataFrame):
+        # If somehow 'Predicted' returns a DataFrame, take the first column
+        phase_series = phase_series.iloc[:, 0]
+    print(f"  Phase distribution: {phase_series.value_counts().to_dict()}")
 
     # Validate phase labels
     valid_phases = {'G1', 'S', 'G2M'}
-    unique_phases = set(data_custom['Predicted'].unique())
+    unique_phases = set(phase_series.unique())
     if not unique_phases.issubset(valid_phases):
         raise ValueError(f"Invalid phase labels found: {unique_phases}. Must be one of {valid_phases}")
 

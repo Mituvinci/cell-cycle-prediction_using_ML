@@ -1,107 +1,72 @@
-# Python
+# ============================================================================
+# SIMPLE GITIGNORE - Upload folders 0-5, exclude data/docs/logs/models/results
+# ============================================================================
+
+# Python cache
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+.ipynb_checkpoints/
 
-# Jupyter Notebook
-.ipynb_checkpoints
-*.ipynb_checkpoints
-
-# PyTorch
-*.pt
-*.pth
-*.ckpt
-
-# Data files (exclude entire folder)
+# ============================================================================
+# EXCLUDE THESE 5 DIRECTORIES
+# ============================================================================
 data/
+docs/
+logs/
+models/
+results/
 
-# Data file types
-*.csv
-*.txt
-*.tsv
-*.mtx
-*.h5
-*.hdf5
+# ============================================================================
+# EXCLUDE ROOT-LEVEL SCRIPTS (but keep subdirectory scripts!)
+# ============================================================================
+/*.py
+/*.sh
 
-# EXCEPT keep requirements files
-!requirements.txt
-!environment.yml
+# ============================================================================
+# EXCLUDE INTERNAL DOCUMENTATION (keep only README.md)
+# ============================================================================
+CLAUDE.md
+EVALUATION_WORKFLOW.md
+CLASSWISE_METRICS_UPDATE.md
+ENSEMBLE_FIX_SUMMARY.md
+DATA_STANDARDIZATION_SUMMARY.md
+GITHUB_UPLOAD_GUIDE.md
+README.md.backup
 
-# SLURM and shell script files
-*.slurm
-*.sh
+# ============================================================================
+# EXCLUDE MANUSCRIPT FILES
+# ============================================================================
+*.pdf
+*.docx
+*.doc
+
+# ============================================================================
+# EXCLUDE SLURM OUTPUTS
+# ============================================================================
 slurm-*.out
 slurm-*.err
 
-# Model outputs
-models/saved_models/*/
-!models/saved_models/.gitkeep
+# ============================================================================
+# KEEP requirements.txt and environment.yml
+# ============================================================================
+!requirements.txt
+!environment.yml
 
-# Results (exclude entire folder)
-results/
-
-# Documentation (exclude entire folder)
-docs/
-
-# Markdown files (EXCEPT README.md)
-*.md
-!README.md
-
-# Manuscript and review files
-All_Reveiwers' comments_ScholarOne Manuscripts._BiB_CCP.pdf
-CLAUDE.md
-manuscript_revised_6921_words_7152025_HA.docx
-supplementaries_7_15_2025.docx
-README.md.backup
-
-# Logs
-*.log
-logs/
-*.tensorboard
-
-# IDE
+# ============================================================================
+# OS and IDE
+# ============================================================================
+.DS_Store
+Thumbs.db
 .vscode/
 .idea/
 *.swp
-*.swo
 *~
 
-# OS
-.DS_Store
-Thumbs.db
-
+# ============================================================================
 # Environment
+# ============================================================================
 .env
 .venv
-env/
 venv/
 ENV/
-env.bak/
-venv.bak/
-
-# Temporary files
-*.tmp
-temp_*.py
-temp_*.ipynb
-
-# R
-.Rhistory
-.RData
-.Rproj.user

@@ -1,8 +1,9 @@
 # Cell Cycle Phase Prediction Pipeline
 ## Deep Learning Models for Single-Cell RNA-Seq Data
 
-> **Status:** Phase D - SHAP Analysis & Custom Data Support Complete
-> **Last Updated:** 2025-11-28
+> **Status:** Phase G - Enhanced Evaluation with Class-Wise Metrics Complete
+> **Last Updated:** 2025-12-02
+> **Training:** 12/16 models complete (75%) | 4 models still running
 
 ---
 
@@ -451,37 +452,53 @@ python 2_model_training/train_traditional_ml.py \
 
 Evaluate trained models on benchmark datasets with ground truth labels.
 
+**NEW**: Evaluation now includes **class-wise metrics** (per-class precision, recall, F1, accuracy, MCC) for all 3 cell cycle phases (G1, S, G2M)!
+
 ### 3.1 Evaluate on Standard Benchmarks
 
 ```bash
-# Evaluate Deep Learning model on all benchmarks
+# Evaluate Deep Learning model on all benchmarks (default)
 python 3_evaluation/evaluate_models.py \
   --model_path models/saved_models/dnn3/dnn3_NFT_reh_fld_1.pt \
-  --benchmarks SUP GSE146773 GSE64016 Buettner_mESC \
   --output results/dnn3_all_benchmarks.csv
+# Output includes 4 rows (SUP, GSE146773, GSE64016, Buettner_mESC)
 
 # Evaluate Traditional ML model on all benchmarks
 python 3_evaluation/evaluate_models.py \
   --model_path models/saved_models/random_forest/rf_NFT_reh_fld_1.joblib \
-  --benchmarks SUP GSE146773 GSE64016 Buettner_mESC \
   --output results/rf_all_benchmarks.csv
 
 # Evaluate on specific benchmarks only
 python 3_evaluation/evaluate_models.py \
   --model_path models/saved_models/dnn3/dnn3_NFT_reh_fld_1.pt \
-  --benchmarks GSE146773 \
-  --output results/dnn3_gse146773_only.csv
+  --benchmarks GSE146773 GSE64016 \
+  --output results/dnn3_two_benchmarks.csv
+# Output includes 2 rows (GSE146773, GSE64016 only)
 ```
 
-### 3.2 Evaluate on Custom Benchmark
+### 3.2 Evaluate on Custom Benchmark ONLY
 
 ```bash
-# Evaluate on CUSTOM benchmark data (your own CSV with ground truth)
+# Evaluate ONLY on custom benchmark (skips standard benchmarks)
 python 3_evaluation/evaluate_models.py \
   --model_path models/saved_models/dnn3/dnn3_NFT_reh_fld_1.pt \
-  --custom_benchmark /path/to/your_benchmark.csv \
-  --custom_benchmark_name "MyBenchmark" \
-  --output results/dnn3_custom_benchmark.csv
+  --custom_benchmark /path/to/reviewer_data.csv \
+  --custom_benchmark_name "Reviewer_Dataset" \
+  --output results/dnn3_custom_only.csv
+# Output includes 1 row (Reviewer_Dataset only)
+```
+
+### 3.3 Combine Standard + Custom Benchmarks
+
+```bash
+# Evaluate on specific standard benchmarks + custom benchmark
+python 3_evaluation/evaluate_models.py \
+  --model_path models/saved_models/dnn3/dnn3_NFT_reh_fld_1.pt \
+  --benchmarks GSE146773 \
+  --custom_benchmark /path/to/reviewer_data.csv \
+  --custom_benchmark_name "Reviewer_Dataset" \
+  --output results/dnn3_combined.csv
+# Output includes 2 rows (GSE146773 + Reviewer_Dataset)
 ```
 
 **Custom Benchmark CSV Format**:
@@ -494,7 +511,33 @@ CELL_003,G2M,3.4,1.9,5.2,...
 
 **Important**: First column = cell_id, second column = phase_label (G1/S/G2M), remaining = genes
 
-### 3.3 Ensemble Methods
+### 3.4 Output Format (Class-Wise Metrics)
+
+The evaluation CSV now includes **15 additional class-wise columns**:
+
+**Overall Metrics:**
+- `accuracy`, `f1`, `precision`, `recall`, `roc_auc`, `balanced_acc`, `mcc`, `kappa`
+
+**Class-Wise Metrics (G1, S, G2M):**
+- `precision_g1`, `precision_s`, `precision_g2m`
+- `recall_g1`, `recall_s`, `recall_g2m`
+- `f1_g1`, `f1_s`, `f1_g2m`
+- `accuracy_g1`, `accuracy_s`, `accuracy_g2m`
+- `mcc_g1`, `mcc_s`, `mcc_g2m`
+
+**Example Output:**
+```csv
+model,dataset,accuracy,f1,precision,recall,roc_auc,balanced_acc,mcc,kappa,precision_g1,precision_s,precision_g2m,recall_g1,recall_s,recall_g2m,f1_g1,f1_s,f1_g2m,accuracy_g1,accuracy_s,accuracy_g2m,mcc_g1,mcc_s,mcc_g2m
+dnn3,GSE146773,75.2,70.5,72.3,69.1,84.2,74.8,0.65,0.63,78.5,68.2,74.1,80.1,65.3,72.5,79.3,66.7,73.3,85.2,70.1,75.8,0.72,0.58,0.67
+```
+
+**Benefits:**
+- ✅ Identify which phases are harder to predict
+- ✅ Detect class imbalance issues
+- ✅ Compare per-class performance across species
+- ✅ Create detailed supplementary tables for manuscripts
+
+### 3.5 Ensemble Methods
 
 Ensemble fusion is implemented in `3_evaluation/ensemble_fusion.py` with two methods:
 - **Score Fusion**: Averages predicted probabilities across models

@@ -34,6 +34,45 @@ def is_traditional_ml(model):
     return isinstance(model, sklearn.base.BaseEstimator)
 
 
+def extract_classwise_metrics(report_df, label_encoder):
+    """
+    Extract class-wise metrics from classification report DataFrame.
+
+    Args:
+        report_df: DataFrame containing classification report
+        label_encoder: LabelEncoder with class names
+
+    Returns:
+        dict: Class-wise metrics (precision, recall, f1-score, accuracy, MCC)
+    """
+    classwise_metrics = {}
+
+    # Get class names from label encoder
+    class_names = label_encoder.classes_
+
+    for cls in class_names:
+        cls_lower = cls.lower()  # g1, s, g2m
+
+        # Extract metrics from report_df
+        # report_df has columns for each class and rows for precision, recall, f1-score, support
+        if cls in report_df.columns:
+            # Precision, Recall, F1-score from classification report
+            if 'precision' in report_df.index:
+                classwise_metrics[f'precision_{cls_lower}'] = report_df.loc['precision', cls]
+            if 'recall' in report_df.index:
+                classwise_metrics[f'recall_{cls_lower}'] = report_df.loc['recall', cls]
+            if 'f1-score' in report_df.index:
+                classwise_metrics[f'f1_{cls_lower}'] = report_df.loc['f1-score', cls]
+
+            # Accuracy and MCC from the added rows
+            if 'Accuracy' in report_df.index:
+                classwise_metrics[f'accuracy_{cls_lower}'] = report_df.loc['Accuracy', cls]
+            if 'MCC' in report_df.index:
+                classwise_metrics[f'mcc_{cls_lower}'] = report_df.loc['MCC', cls]
+
+    return classwise_metrics
+
+
 def evaluate_on_benchmark(model, scaler, label_encoder, selected_features, model_dir, dataset_name, is_tml=False):
     """
     Evaluate model on a single benchmark dataset.
@@ -47,7 +86,7 @@ def evaluate_on_benchmark(model, scaler, label_encoder, selected_features, model
         dataset_name: "SUP", "GSE146773", "GSE64016", or "Buettner_mESC"
 
     Returns:
-        dict: Evaluation metrics
+        dict: Evaluation metrics (overall + class-wise)
     """
     from utils.data_utils import (
         load_reh_or_sup_benchmark,
@@ -72,12 +111,16 @@ def evaluate_on_benchmark(model, scaler, label_encoder, selected_features, model
         # Traditional ML evaluation (sklearn models)
         benchmark_labels_encoded = label_encoder.transform(benchmark_labels)
 
-        accuracy, f1, precision, recall, roc_auc, balanced_acc, mcc, kappa, _, _ = evaluate_model_non_neural(
+        accuracy, f1, precision, recall, roc_auc, balanced_acc, mcc, kappa, _, report_df = evaluate_model_non_neural(
             model, benchmark_features, benchmark_labels_encoded, label_encoder,
             model_dir, dataset_name=dataset_name
         )
 
-        return {
+        # Extract class-wise metrics from report_df
+        classwise_metrics = extract_classwise_metrics(report_df, label_encoder)
+
+        # Combine overall and class-wise metrics
+        metrics = {
             'dataset': dataset_name,
             'accuracy': accuracy,
             'f1': f1,
@@ -88,6 +131,8 @@ def evaluate_on_benchmark(model, scaler, label_encoder, selected_features, model
             'mcc': mcc,
             'kappa': kappa
         }
+        metrics.update(classwise_metrics)
+        return metrics
     else:
         # Deep Learning evaluation (PyTorch models)
         benchmark_labels_encoded = torch.tensor(
@@ -108,12 +153,16 @@ def evaluate_on_benchmark(model, scaler, label_encoder, selected_features, model
         )
 
         # Evaluate model
-        accuracy, test_loss, f1, precision, recall, roc_auc, balanced_acc, mcc, kappa, _, _, _ = evaluate_model(
+        accuracy, test_loss, f1, precision, recall, roc_auc, balanced_acc, mcc, kappa, _, _, report_df = evaluate_model(
             model, benchmark_loader, nn.CrossEntropyLoss(), label_encoder,
             model_dir, dataset_name=dataset_name
         )
 
-        return {
+        # Extract class-wise metrics from report_df
+        classwise_metrics = extract_classwise_metrics(report_df, label_encoder)
+
+        # Combine overall and class-wise metrics
+        metrics = {
             'dataset': dataset_name,
             'accuracy': accuracy,
             'f1': f1,
@@ -124,6 +173,8 @@ def evaluate_on_benchmark(model, scaler, label_encoder, selected_features, model
             'mcc': mcc,
             'kappa': kappa
         }
+        metrics.update(classwise_metrics)
+        return metrics
 
 
 def main():
@@ -139,10 +190,10 @@ def main():
     parser.add_argument(
         '--benchmarks',
         type=str,
-        nargs='+',
-        default=["SUP", "GSE146773", "GSE64016", "Buettner_mESC"],
+        nargs='*',
+        default=None,
         choices=["SUP", "GSE146773", "GSE64016", "Buettner_mESC"],
-        help='Benchmarks to evaluate on (default: all 4)'
+        help='Benchmarks to evaluate on (default: all 4 if no custom benchmark, else none)'
     )
     parser.add_argument(
         '--output',
@@ -164,6 +215,19 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Set default benchmarks behavior
+    if args.benchmarks is None:
+        # If no custom benchmark: use all 4 standard benchmarks
+        # If custom benchmark provided: skip standard benchmarks (custom only)
+        if args.custom_benchmark is None:
+            args.benchmarks = ["SUP", "GSE146773", "GSE64016", "Buettner_mESC"]
+        else:
+            args.benchmarks = []  # Empty list = skip standard benchmarks
+
+    # Validate that at least one benchmark is provided
+    if len(args.benchmarks) == 0 and args.custom_benchmark is None:
+        parser.error("Must provide at least one benchmark (either --benchmarks or --custom_benchmark)")
 
     # Load model components
     print(f"\n{'='*80}")
@@ -214,7 +278,7 @@ def main():
         if is_tml:
             from utils.training_utils import evaluate_model_non_neural
             benchmark_labels_encoded = label_encoder.transform(benchmark_labels)
-            accuracy, f1, precision, recall, roc_auc, balanced_acc, mcc, kappa, _, _ = evaluate_model_non_neural(
+            accuracy, f1, precision, recall, roc_auc, balanced_acc, mcc, kappa, _, report_df = evaluate_model_non_neural(
                 model, benchmark_features, benchmark_labels_encoded, label_encoder,
                 model_dir, dataset_name=args.custom_benchmark_name
             )
@@ -239,10 +303,13 @@ def main():
             )
 
             from utils.training_utils import evaluate_model
-            accuracy, test_loss, f1, precision, recall, roc_auc, balanced_acc, mcc, kappa, _, _, _ = evaluate_model(
+            accuracy, test_loss, f1, precision, recall, roc_auc, balanced_acc, mcc, kappa, _, _, report_df = evaluate_model(
                 model, benchmark_loader, nn.CrossEntropyLoss(), label_encoder,
                 model_dir, dataset_name=args.custom_benchmark_name
             )
+
+        # Extract class-wise metrics
+        classwise_metrics = extract_classwise_metrics(report_df, label_encoder)
 
         custom_metrics = {
             'dataset': args.custom_benchmark_name,
@@ -255,6 +322,7 @@ def main():
             'mcc': mcc,
             'kappa': kappa
         }
+        custom_metrics.update(classwise_metrics)
         results.append(custom_metrics)
 
         print(f"  Accuracy: {custom_metrics['accuracy']:.2f}%")
