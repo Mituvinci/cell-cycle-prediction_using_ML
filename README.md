@@ -532,10 +532,10 @@ dnn3,GSE146773,75.2,70.5,72.3,69.1,84.2,74.8,0.65,0.63,78.5,68.2,74.1,80.1,65.3,
 ```
 
 **Benefits:**
-- ✅ Identify which phases are harder to predict
-- ✅ Detect class imbalance issues
-- ✅ Compare per-class performance across species
-- ✅ Create detailed supplementary tables for manuscripts
+- Identify which phases are harder to predict
+- Detect class imbalance issues
+- Compare per-class performance across species
+- Create detailed supplementary tables for manuscripts
 
 ### 3.5 Ensemble Methods
 
