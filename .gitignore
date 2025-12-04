@@ -9,13 +9,16 @@ __pycache__/
 .ipynb_checkpoints/
 
 # ============================================================================
-# EXCLUDE THESE 5 DIRECTORIES
+# EXCLUDE THESE 5 DIRECTORIES (root level only)
 # ============================================================================
-data/
-docs/
-logs/
-models/
-results/
+/data/
+/docs/
+/logs/
+/models/
+/results/
+
+# Exception: Allow model architecture code
+!2_model_training/models/
 
 # ============================================================================
 # EXCLUDE ROOT-LEVEL SCRIPTS (but keep subdirectory scripts!)
