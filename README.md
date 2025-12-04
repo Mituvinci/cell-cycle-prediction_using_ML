@@ -67,6 +67,51 @@ See `DATA_STANDARDIZATION_SUMMARY.md` for complete documentation.
 
 ---
 
+## 7-Dataset Feature Intersection
+
+**NEW**: Training with `--dataset new_human` or `--dataset new_mouse` uses gene intersection across **all 7 datasets** for maximum cross-species compatibility.
+
+### How It Works
+The `load_and_preprocess_data_v2()` function:
+1. Loads all 7 datasets (REH, SUP, GSE146773, GSE64016, Buettner_mESC, new_human_PBMC, new_mouse_brain)
+2. Capitalizes gene names in all datasets
+3. Computes intersection: **6066 common genes** across all 7 datasets
+4. Trains models using only these 6066 genes
+
+### Benefits
+- Models can be evaluated on ANY benchmark without gene mismatch errors
+- Cross-species validation works seamlessly
+- Human and mouse ortholog genes (Gapdh, Actb, Tp53) are automatically matched
+
+### Usage
+```bash
+# Train on new human PBMC data with 7-dataset intersection
+python 2_model_training/train_deep_learning.py \
+  --model simpledense \
+  --dataset new_human \
+  --trials 20 \
+  --cv 5 \
+  --output models/human_pbmc/simpledense/
+
+# Train on new mouse brain data with 7-dataset intersection
+python 2_model_training/train_deep_learning.py \
+  --model cnn \
+  --dataset new_mouse \
+  --trials 20 \
+  --cv 5 \
+  --output models/mouse_brain/cnn/
+
+# Test gene intersection before training
+python test_gene_intersection.py
+```
+
+**Available datasets:**
+- `reh`, `sup`: Old human training data (4-dataset intersection)
+- `new_human`: New human PBMC data (7-dataset intersection)
+- `new_mouse`: New mouse brain data (7-dataset intersection)
+
+---
+
 ## Datasets
 
 ### Training Data (Default)
