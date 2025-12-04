@@ -372,22 +372,145 @@ def load_and_preprocess_data(scaling_method, is_reh=True, check_feature=False, s
     return X_train_resampled, X_test, y_train_resampled, y_test, cell_ids_test, scaler, label_encoder
 
 
+def load_and_preprocess_data_v2(scaling_method, dataset='new_human', check_feature=False, selection_method=None):
+    """
+    Loads and preprocesses data with 7-dataset feature intersection.
+
+    CRITICAL: Computes intersection of ALL 7 datasets BEFORE preprocessing:
+    - REH, SUP-B15 (old human training)
+    - GSE146773, GSE64016 (human benchmarks)
+    - Buettner_mESC (mouse benchmark)
+    - new_human_PBMC (new human training)
+    - new_mouse_brain (new mouse training)
+
+    Then selects appropriate training data based on dataset parameter.
+
+    Args:
+        scaling_method (str): Scaling method to use.
+        dataset (str): Which training data to use ('new_human', 'new_mouse', 'reh', 'sup').
+        check_feature (bool): Whether to check feature overlap.
+        selection_method (str): Feature selection method.
+
+    Returns:
+        tuple: (X_train_resampled, X_test, y_train_resampled, y_test, cell_ids_test, scaler, label_encoder)
+    """
+    # Paths to all datasets
+    data_dir = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data"
+
+    path_reh = f"{data_dir}/filtered_normalized_gene_expression_cc_label1_GD428_21136_Hu_REH_Parental_overlapped_all_four_regions.csv"
+    path_sup = f"{data_dir}/filtered_normalized_gene_expression_cc_label2_GD444_21136_Hu_Sup_Parental_overlapped_all_four_regions.csv"
+    path_gse146773 = f"{data_dir}/GSE146773_seurat_normalized_gene_expression.csv"
+    path_gse64016 = f"{data_dir}/GSE64016_seurat_normalized_gene_expression.csv"
+    path_buettner = f"{data_dir}/Buettner_mESC_benchmark_clean.csv"
+    path_new_human = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_human/pbmc_human_training_data.csv"
+    path_new_mouse = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_mouse/mouse_brain_training_data.csv"
+
+    # Load all 7 datasets
+    print("Loading all 7 datasets...")
+    data_reh = pd.read_csv(path_reh)
+    data_sup = pd.read_csv(path_sup)
+    data_gse146773 = pd.read_csv(path_gse146773)
+    data_gse64016 = pd.read_csv(path_gse64016)
+    data_buettner = pd.read_csv(path_buettner)
+    data_new_human = pd.read_csv(path_new_human)
+    data_new_mouse = pd.read_csv(path_new_mouse)
+
+    # Capitalize ALL gene names for consistent matching
+    print("Capitalizing gene names for consistent matching...")
+    data_reh = capitalize_gene_names(data_reh)
+    data_sup = capitalize_gene_names(data_sup)
+    data_gse146773 = capitalize_gene_names(data_gse146773)
+    data_gse64016 = capitalize_gene_names(data_gse64016)
+    data_buettner = capitalize_gene_names(data_buettner)
+    data_new_human = capitalize_gene_names(data_new_human)
+    data_new_mouse = capitalize_gene_names(data_new_mouse)
+
+    # Rename columns to standardize
+    data_gse146773.rename(columns={'paper_phase': 'Predicted', 'cell': 'gex_barcode'}, inplace=True)
+    data_gse64016.rename(columns={'Labeled': 'Predicted'}, inplace=True)
+
+    # Get feature columns (exclude metadata)
+    def get_feature_cols(df):
+        non_numeric_cols = df.select_dtypes(include=['object', 'category']).columns
+        feature_cols = [col for col in df.columns if col not in non_numeric_cols]
+        return set(feature_cols)
+
+    # Compute intersection of ALL 7 datasets
+    print("Computing feature intersection across all 7 datasets...")
+    common_features = (
+        get_feature_cols(data_reh) &
+        get_feature_cols(data_sup) &
+        get_feature_cols(data_gse146773) &
+        get_feature_cols(data_gse64016) &
+        get_feature_cols(data_buettner) &
+        get_feature_cols(data_new_human) &
+        get_feature_cols(data_new_mouse)
+    )
+
+    common_features = list(common_features)
+    print(f"Found {len(common_features)} common features across all 7 datasets")
+
+    if len(common_features) == 0:
+        raise ValueError("ERROR: No common features found across all 7 datasets! Check gene name formatting.")
+
+    # Add metadata columns back
+    metadata_cols = ['Predicted', 'gex_barcode']
+
+    # Filter all datasets to common features
+    def filter_to_common(df, common_feats, metadata):
+        existing_metadata = [col for col in metadata if col in df.columns]
+        return df[common_feats + existing_metadata]
+
+    data_reh = filter_to_common(data_reh, common_features, metadata_cols)
+    data_sup = filter_to_common(data_sup, common_features, metadata_cols)
+    data_gse146773 = filter_to_common(data_gse146773, common_features, metadata_cols)
+    data_gse64016 = filter_to_common(data_gse64016, common_features, metadata_cols)
+    data_buettner = filter_to_common(data_buettner, common_features, metadata_cols)
+    data_new_human = filter_to_common(data_new_human, common_features, metadata_cols)
+    data_new_mouse = filter_to_common(data_new_mouse, common_features, metadata_cols)
+
+    # Select training dataset based on parameter
+    dataset_map = {
+        'new_human': data_new_human,
+        'new_mouse': data_new_mouse,
+        'reh': data_reh,
+        'sup': data_sup
+    }
+
+    if dataset not in dataset_map:
+        raise ValueError(f"Unknown dataset: {dataset}. Use 'new_human', 'new_mouse', 'reh', or 'sup'")
+
+    selected_data = dataset_map[dataset]
+    print(f"Using training data: {dataset}")
+
+    # Apply preprocessing to selected training data
+    X_train_resampled, X_test, y_train_resampled, y_test, cell_ids_test, scaler, label_encoder = preprocess_rna_data(
+        selected_data, scaling_method, selection_method
+    )
+
+    return X_train_resampled, X_test, y_train_resampled, y_test, cell_ids_test, scaler, label_encoder
+
+
 #######################################################
 #           BENCHMARK DATA LOADING FUNCTIONS          #
 #######################################################
 
 def scaling_benchmark(benchmark_data, scaler):
     """
-    Applies scaling to benchmark data using a fitted scaler.
+    Applies scaling to benchmark data using a fitted scaler, followed by normalization.
 
     EXACT implementation from 1_0_principle_aurelien_ml.py line 327-352
+
+    CRITICAL: This function performs TWO steps:
+    1. Apply scaler.transform()
+    2. Apply additional normalization: (scaled - mean) / std
 
     Args:
         benchmark_data (pd.DataFrame): Benchmark data to transform.
         scaler: Fitted scaler object.
 
     Returns:
-        pd.DataFrame: Scaled benchmark data
+        pd.DataFrame: Scaled and normalized benchmark data
     """
     # Ensure benchmark data has the same feature order as scaler expects
     expected_feature_order = scaler.feature_names_in_
@@ -399,7 +522,13 @@ def scaling_benchmark(benchmark_data, scaler):
     # Convert scaled data back to DataFrame
     scaled_benchmark_data = pd.DataFrame(scaled_benchmark_data, columns=benchmark_data.columns)
 
-    return scaled_benchmark_data
+    # CRITICAL STEP: Apply additional normalization
+    X_benchmark_normalized = (scaled_benchmark_data - scaled_benchmark_data.mean()) / scaled_benchmark_data.std()
+
+    # Convert back to DataFrame
+    X_benchmark_normalized = pd.DataFrame(X_benchmark_normalized, columns=benchmark_data.columns)
+
+    return X_benchmark_normalized
 
 
 def preprocess_benchmark_data(data, title, check_feature=False):
@@ -439,8 +568,8 @@ def data_preprocess_GSE(data, scaler, dataset_name, check_feature=False):
     """
     Preprocesses a GSE benchmark data file.
 
-    Handles missing features by adding them as zeros.
-    Based on data_preprocess_GSE_local from 1_0_principle_aurelien_ml.py line 871-896
+    EXACT implementation from user's original code.
+    Simply filters to expected features - NO adding zeros for missing genes!
 
     Args:
         data (pd.DataFrame): Raw GSE data.
@@ -454,22 +583,9 @@ def data_preprocess_GSE(data, scaler, dataset_name, check_feature=False):
     """
     X_labeled, y_labeled, cell_ids_labeled = preprocess_benchmark_data(data, dataset_name, check_feature)
 
+    # Simply filter to expected features (matching scaler)
+    # If features are missing, this will raise KeyError - which is correct!
     expected_features = scaler.feature_names_in_
-    current_features = X_labeled.columns
-
-    # Drop extra genes that are in benchmark but not in training
-    extra_features = [f for f in current_features if f not in expected_features]
-    if extra_features:
-        X_labeled = X_labeled.drop(columns=extra_features)
-
-    # Identify missing genes that are in training but not in benchmark
-    missing_features = [f for f in expected_features if f not in current_features]
-    if missing_features:
-        # Add missing features with zeros (using concat for performance)
-        missing_df = pd.DataFrame(0, index=X_labeled.index, columns=missing_features)
-        X_labeled = pd.concat([X_labeled, missing_df], axis=1)
-
-    # Reorder columns to match expected feature order
     X_labeled = X_labeled[expected_features]
 
     # Apply scaling
@@ -569,8 +685,9 @@ def load_gse146773(scaler, check_feature=False):
     # Rename columns to keep consistent naming
     data_gse_benchmark.rename(columns={'paper_phase': 'Predicted', 'cell': 'gex_barcode'}, inplace=True)
 
-    # Capitalize all gene names for species independence
-    data_gse_benchmark = capitalize_gene_names(data_gse_benchmark)
+    # NOTE: NOT capitalizing gene names for old model compatibility
+    # Old models were trained with original gene name format (uppercase for human)
+    # data_gse_benchmark = capitalize_gene_names(data_gse_benchmark)
 
     data_gse_benchmark['Predicted'] = data_gse_benchmark['Predicted'].str.replace(
         r'^S.*', 'S', regex=True
@@ -613,8 +730,9 @@ def load_gse64016(scaler, check_feature=False):
     # Rename columns to keep consistent naming
     data_gse_benchmark.rename(columns={'Labeled': 'Predicted'}, inplace=True)
 
-    # Capitalize all gene names for species independence
-    data_gse_benchmark = capitalize_gene_names(data_gse_benchmark)
+    # NOTE: NOT capitalizing gene names for old model compatibility
+    # Old models were trained with original gene name format (uppercase for human)
+    # data_gse_benchmark = capitalize_gene_names(data_gse_benchmark)
 
     # Remove rows where 'Predicted' starts with 'H1'
     data_gse_benchmark = data_gse_benchmark[
@@ -663,19 +781,19 @@ def load_buettner_mesc(scaler, check_feature=False):
         "Buettner_mESC_benchmark_clean.csv"
     )
 
-    # Load metadata for ground truth labels
-    path_buettner_metadata = os.path.join(
+    # Load ground truth labels
+    path_buettner_ground_truth = os.path.join(
         data_dir,
-        "Buettner_mESC_metadata.csv"
+        "Buettner_mESC_goundTruth.csv"
     )
 
-    # Load expression data and metadata
+    # Load expression data and ground truth
     data_buettner_benchmark = pd.read_csv(path_buettner_benchmark)
-    metadata = pd.read_csv(path_buettner_metadata)
+    ground_truth = pd.read_csv(path_buettner_ground_truth)
 
-    # Merge with metadata to get ground truth labels
+    # Merge with ground truth to get labels
     data_buettner_benchmark = data_buettner_benchmark.merge(
-        metadata[['Cell_ID', 'Phase']],
+        ground_truth[['Cell_ID', 'Phase']],
         on='Cell_ID',
         how='left'
     )
@@ -683,8 +801,9 @@ def load_buettner_mesc(scaler, check_feature=False):
     # Rename columns to keep consistent naming
     data_buettner_benchmark.rename(columns={'Phase': 'Predicted', 'Cell_ID': 'gex_barcode'}, inplace=True)
 
-    # Capitalize all gene names for species independence
-    data_buettner_benchmark = capitalize_gene_names(data_buettner_benchmark)
+    # NOTE: NOT capitalizing gene names for old model compatibility
+    # Old models were trained with original gene name format
+    # data_buettner_benchmark = capitalize_gene_names(data_buettner_benchmark)
 
     # Standardize phase labels (if needed)
     # Map common variations to standard G1, S, G2M format

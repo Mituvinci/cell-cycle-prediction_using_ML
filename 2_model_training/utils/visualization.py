@@ -16,9 +16,11 @@ import os
 
 def plot_training_history(train_loss, train_score, save_dir, name="training"):
     """
-    Plot training loss and accuracy over epochs.
+    Plots training loss and accuracy over epochs.
+    train_loss and train_score should each be a list of floats,
+    with the same length = number of epochs.
 
-    EXACT implementation from 1_0_principle_aurelien_ml.py line 1433-1459
+    EXACT implementation from 1_0_principle_aurelien_ml.py
 
     Args:
         train_loss (list): Training losses per epoch
@@ -29,71 +31,50 @@ def plot_training_history(train_loss, train_score, save_dir, name="training"):
     Returns:
         str: Path to saved plot
     """
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
-
-    # Plot Loss
-    ax1.plot(train_loss, label='Training Loss', color='blue')
-    ax1.set_xlabel('Epoch')
-    ax1.set_ylabel('Loss')
-    ax1.set_title(f'{name.capitalize()} Loss over Epochs')
-    ax1.legend()
-    ax1.grid(True)
-
-    # Plot Accuracy
-    ax2.plot(train_score, label='Training Accuracy', color='green')
-    ax2.set_xlabel('Epoch')
-    ax2.set_ylabel('Accuracy (%)')
-    ax2.set_title(f'{name.capitalize()} Accuracy over Epochs')
-    ax2.legend()
-    ax2.grid(True)
-
-    plt.tight_layout()
-
-    # Save plot
-    plot_path = os.path.join(save_dir, f"{name}_history.png")
+    if name == "training":
+        title = "Training Loss and Accuracy"
+    if name == "classification":
+        title = "Classification Loss and Accuracy"
+    else:
+        title = "Pretraining Loss and reconstruction similarity"
+    epochs = range(len(train_loss))  # e.g. 0..(epochs-1)
+    plot_path = os.path.join(save_dir, f"{name}_training_plot.png")
+    plt.figure(figsize=(8, 5))
+    plt.plot(epochs, train_loss, label='Train Loss')
+    plt.plot(epochs, train_score, label='Train Accuracy')
+    plt.xlabel('Epoch')
+    plt.ylabel('Value')
+    plt.title(f"{title}")
+    plt.legend()
     plt.savefig(plot_path)
+    plt.show()
     plt.close()
-
     return plot_path
 
 
 def plot_validation_accuracy(test_scores, outer_fold, save_dir, title=""):
     """
-    Plot validation accuracy across folds.
+    Plots validation accuracy across inner folds for each outer fold.
 
-    EXACT implementation from 1_0_principle_aurelien_ml.py line 1461-1495
+    EXACT implementation from 1_0_principle_aurelien_ml.py
 
     Args:
         test_scores (list): Test accuracies for each fold
-        outer_fold (int): Number of folds
+        outer_fold (int): Outer fold number
         save_dir (str): Directory to save plot
-        title (str): Plot title
+        title (str): Plot title prefix
 
     Returns:
         str: Path to saved plot
     """
-    fig, ax = plt.subplots(figsize=(8, 5))
-
-    folds = list(range(1, outer_fold + 1))
-    ax.plot(folds, test_scores, marker='o', linestyle='-', color='purple', linewidth=2, markersize=8)
-    ax.set_xlabel('Fold Number', fontsize=12)
-    ax.set_ylabel('Test Accuracy (%)', fontsize=12)
-    ax.set_title(title if title else 'Validation Accuracy per Fold', fontsize=14)
-    ax.grid(True, linestyle='--', alpha=0.6)
-    ax.set_xticks(folds)
-
-    # Add mean and std annotation
-    mean_acc = sum(test_scores) / len(test_scores)
-    import numpy as np
-    std_acc = np.std(test_scores)
-    ax.axhline(y=mean_acc, color='red', linestyle='--', label=f'Mean: {mean_acc:.2f}%')
-    ax.legend()
-
-    plt.tight_layout()
-
-    # Save plot
-    plot_path = os.path.join(save_dir, "validation_accuracy_per_fold.png")
+    plot_path = os.path.join(save_dir, "_validationperfold_plot.png")
+    plt.figure(figsize=(8, 5))
+    plt.plot(range(len(test_scores)), test_scores, marker='o', label='Validation Accuracy')
+    plt.xlabel('Inner Fold')
+    plt.ylabel('Validation Accuracy')
+    plt.title(f'{title} Validation Accuracy per Inner Fold (Outer Fold {outer_fold})')
+    plt.legend()
     plt.savefig(plot_path)
+    plt.show()
     plt.close()
-
     return plot_path

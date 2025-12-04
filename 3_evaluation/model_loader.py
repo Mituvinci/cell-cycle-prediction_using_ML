@@ -20,7 +20,7 @@ import sys
 
 # Add parent directory to path for model imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../2_model_training'))
-from models.dense_models import SimpleDenseModel, DeepDenseModel
+from models.dense_models import SimpleDenseModel, DeepDenseModel, EnhancedDenseModel, EnhancedDenseAttentionModel
 from models.cnn_models import CNNModel
 from models.hybrid_models import HybridCNNDenseModel, FeatureEmbeddingModel
 
@@ -102,8 +102,52 @@ def build_model(model_type, input_dim, hyperparams):
             output_dim=num_classes
         ).to(device)
 
+    elif model_type == "enhancedense":
+        # EnhancedDenseModel (without attention)
+        return EnhancedDenseModel(
+            n_layers=int(hyperparams.get("nlayers", "5")),
+            units_per_layer=eval(hyperparams.get("nunits", "[128, 64, 32, 16, 8]")),
+            dropouts=eval(hyperparams.get("dropouts", "[0.2, 0.3, 0.4, 0.5, 0.5]")),
+            input_features=input_dim
+        ).to(device)
+
+    elif model_type == "enhancedenseAttention":
+        # EnhancedDenseAttentionModel (with attention)
+        return EnhancedDenseAttentionModel(
+            n_layers=int(hyperparams.get("nlayers", "5")),
+            units_per_layer=eval(hyperparams.get("nunits", "[128, 64, 32, 16, 8]")),
+            dropouts=eval(hyperparams.get("dropouts", "[0.2, 0.3, 0.4, 0.5, 0.5]")),
+            input_features=input_dim
+        ).to(device)
+
     else:
         raise ValueError(f"Unknown model type: {model_type}")
+
+
+def remap_old_state_dict(state_dict, model_type):
+    """
+    Remap old state_dict keys to match new model architecture.
+
+    Old EnhancedDense models have keys: "0.weight", "3.weight", etc.
+    New EnhancedDense models have keys: "model.0.weight", "model.3.weight", etc.
+
+    Args:
+        state_dict (dict): Original state dict from loaded model
+        model_type (str): Model type prefix
+
+    Returns:
+        dict: Remapped state dict
+    """
+    if model_type in ["enhancedense", "enhancedenseAttention"]:
+        # Check if keys need remapping (old format without "model." prefix)
+        if any(k.startswith("0.") or k.startswith("3.") for k in state_dict.keys()):
+            print("  Detected old state_dict format, remapping keys...")
+            new_state_dict = {}
+            for k, v in state_dict.items():
+                new_key = f"model.{k}"
+                new_state_dict[new_key] = v
+            return new_state_dict
+    return state_dict
 
 
 def load_model_components(model_path):
@@ -168,7 +212,12 @@ def load_model_components(model_path):
     else:
         # Build and load Deep Learning model
         model = build_model(model_type, len(selected_features), hyperparams)
-        model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
+
+        # Load state dict with compatibility for old models
+        state_dict = torch.load(model_path, map_location=device, weights_only=True)
+        state_dict = remap_old_state_dict(state_dict, model_type)
+
+        model.load_state_dict(state_dict)
         model.to(device)
         model.eval()
         print(f"✓ Loaded DL model: {model_type}")
@@ -239,8 +288,11 @@ def load_model_from_dir(model_dir):
     input_dim = len(selected_features)
     model = build_model(model_type, input_dim, hyperparams)
 
-    # Load model weights
-    model.load_state_dict(torch.load(model_file, map_location=device, weights_only=True))
+    # Load model weights with compatibility for old models
+    state_dict = torch.load(model_file, map_location=device, weights_only=True)
+    state_dict = remap_old_state_dict(state_dict, model_type)
+
+    model.load_state_dict(state_dict)
     model.to(device)
     model.eval()
 

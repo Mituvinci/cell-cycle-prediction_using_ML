@@ -62,6 +62,7 @@ Available models:
   - cnn
   - hbdcnn (Hybrid CNN+Dense)
   - fe (Feature Embedding)
+  - enhancedense (Enhanced Dense)
         """
     )
 
@@ -70,7 +71,7 @@ Available models:
         '--model',
         type=str,
         required=True,
-        choices=['simpledense', 'deepdense', 'cnn', 'hbdcnn', 'fe'],
+        choices=['simpledense', 'deepdense', 'cnn', 'hbdcnn', 'fe', 'enhancedense'],
         help='Model type to train'
     )
 
@@ -80,8 +81,8 @@ Available models:
         type=str,
         required=False,
         default='reh',
-        choices=['reh', 'sup'],
-        help='Dataset to use: reh or sup (default: reh). Ignored if --data is provided.'
+        choices=['reh', 'sup', 'new_human', 'new_mouse'],
+        help='Dataset to use: reh, sup, new_human, new_mouse (default: reh). Use new_human/new_mouse for 7-dataset intersection training. Ignored if --data is provided.'
     )
 
     parser.add_argument(

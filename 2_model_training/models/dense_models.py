@@ -141,3 +141,75 @@ class DeepDenseModel(nn.Module):
         x = self.fc4(x)
         x = self.softmax(x)
         return x
+
+
+class AttentionLayer(nn.Module):
+    """Attention layer for enhanced dense model"""
+    def __init__(self, input_dim):
+        super(AttentionLayer, self).__init__()
+        self.attention = nn.Linear(input_dim, input_dim)
+        self.softmax = nn.Softmax(dim=1)
+
+    def forward(self, x):
+        attention_weights = self.softmax(self.attention(x))
+        out = x * attention_weights  # Element-wise multiplication with attention weights
+        return out
+
+
+class EnhancedDenseModel(nn.Module):
+    """
+    Enhanced Dense Model (from original code)
+
+    Flexible architecture with variable number of layers.
+    """
+    def __init__(self, n_layers, units_per_layer, dropouts, input_features):
+        super(EnhancedDenseModel, self).__init__()
+
+        if len(units_per_layer) != n_layers or len(dropouts) != n_layers:
+            raise ValueError("Mismatched lengths of units_per_layer or dropouts")
+
+        layers = []
+        in_features = input_features
+        for i in range(n_layers):
+            layers.append(nn.Linear(in_features, units_per_layer[i]))
+            layers.append(nn.ReLU())
+            layers.append(nn.Dropout(dropouts[i]))
+            in_features = units_per_layer[i]
+        layers.append(nn.Linear(in_features, 3))  # 3 output classes
+
+        self.model = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.model(x)
+
+
+class EnhancedDenseAttentionModel(nn.Module):
+    """
+    Enhanced Dense Model with Attention (from original code)
+
+    Adds attention layer to focus on important input features.
+    """
+    def __init__(self, n_layers, units_per_layer, dropouts, input_features):
+        super(EnhancedDenseAttentionModel, self).__init__()
+
+        if len(units_per_layer) != n_layers or len(dropouts) != n_layers:
+            raise ValueError("Mismatched lengths of units_per_layer or dropouts")
+
+        layers = []
+        # Attention layer to focus on important input features
+        layers.append(AttentionLayer(input_features))
+
+        in_features = input_features
+        for i in range(n_layers):
+            layers.append(nn.Linear(in_features, units_per_layer[i]))
+            layers.append(nn.ReLU())
+            layers.append(nn.Dropout(dropouts[i]))
+            in_features = units_per_layer[i]
+
+        # Final output layer for classification
+        layers.append(nn.Linear(in_features, 3))  # 3 output classes
+
+        self.model = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.model(x)

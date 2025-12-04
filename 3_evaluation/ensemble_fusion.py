@@ -25,7 +25,9 @@ from sklearn.metrics import (
 # Add parent directory for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../2_model_training'))
 from utils.training_utils import evaluate_model
+from utils.data_utils import load_reh_or_sup_benchmark, load_gse146773, load_gse64016, load_buettner_mesc
 from model_loader import load_model_components
+from torch.utils.data import DataLoader, TensorDataset
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -45,10 +47,6 @@ def preprocess_benchmark_data_fusion(scaler, selected_features, label_encoder, d
     Returns:
         tuple: (benchmark_loader, benchmark_labels_encoded)
     """
-    from torch.utils.data import DataLoader, TensorDataset
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../2_model_training'))
-    from utils.data_utils import load_reh_or_sup_benchmark, load_gse146773, load_gse64016, load_buettner_mesc
-
     if dataset_name == "SUP":
         benchmark_features, benchmark_labels, _ = load_reh_or_sup_benchmark(scaler, reh_sup="sup")
     elif dataset_name == "GSE146773":

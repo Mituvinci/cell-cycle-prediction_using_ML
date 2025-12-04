@@ -109,10 +109,14 @@ def evaluate_on_benchmark(model, scaler, label_encoder, selected_features, model
 
     if is_tml:
         # Traditional ML evaluation (sklearn models)
+        # IMPORTANT: TML models need only the selected features (after feature selection)
+        # Filter benchmark_features to match the exact features used during training
+        benchmark_features_filtered = benchmark_features[selected_features]
+
         benchmark_labels_encoded = label_encoder.transform(benchmark_labels)
 
         accuracy, f1, precision, recall, roc_auc, balanced_acc, mcc, kappa, _, report_df = evaluate_model_non_neural(
-            model, benchmark_features, benchmark_labels_encoded, label_encoder,
+            model, benchmark_features_filtered, benchmark_labels_encoded, label_encoder,
             model_dir, dataset_name=dataset_name
         )
 
@@ -135,13 +139,17 @@ def evaluate_on_benchmark(model, scaler, label_encoder, selected_features, model
         return metrics
     else:
         # Deep Learning evaluation (PyTorch models)
+        # IMPORTANT: DL models also need only the selected features (after feature selection)
+        # Filter benchmark_features to match the exact features used during training
+        benchmark_features_filtered = benchmark_features[selected_features]
+
         benchmark_labels_encoded = torch.tensor(
             label_encoder.transform(benchmark_labels),
             dtype=torch.long
         ).to(device)
 
         benchmark_tensor = torch.tensor(
-            benchmark_features.values,
+            benchmark_features_filtered.values,
             dtype=torch.float32
         ).to(device)
 

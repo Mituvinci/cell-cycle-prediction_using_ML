@@ -106,12 +106,22 @@ def optimize_model_with_optuna(
 
             # Switch on model type
             if model_type == enhancedense:
-                # model = Enhance_model(n_layers, n_units, dropouts, input_dim).to(device)
-                raise NotImplementedError("Enhanced model not yet implemented")
+                from models.dense_models import EnhancedDenseModel
+                model = EnhancedDenseModel(
+                    n_layers=n_layers,
+                    units_per_layer=n_units,
+                    dropouts=dropouts,
+                    input_features=input_dim
+                ).to(device)
 
             elif model_type == enhancedenseAttention:
-                # model = Enhance_model_with_attention(n_layers, n_units, dropouts, input_dim).to(device)
-                raise NotImplementedError("Enhanced attention model not yet implemented")
+                from models.dense_models import EnhancedDenseAttentionModel
+                model = EnhancedDenseAttentionModel(
+                    n_layers=n_layers,
+                    units_per_layer=n_units,
+                    dropouts=dropouts,
+                    input_features=input_dim
+                ).to(device)
 
             elif model_type == hybridcnn:
                 model = HybridCNNDenseModel(

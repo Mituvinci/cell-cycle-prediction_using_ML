@@ -21,7 +21,7 @@ import pandas as pd
 import psutil
 import joblib
 
-from .data_utils import load_and_preprocess_data
+from .data_utils import load_and_preprocess_data, load_and_preprocess_data_v2
 from .optuna_utils import optimize_model_with_optuna
 from .training_utils import train_model, evaluate_model
 from .visualization import plot_training_history, plot_validation_accuracy
@@ -101,10 +101,16 @@ def perform_nested_cv_dn(
         print(f"{'='*80}\n")
 
         # Load and preprocess data
-        X_train, X_test, y_train_encoded, y_test, cell_ids_test, scaler, label_encoder = load_and_preprocess_data(
-            scaling_method=scaling_method, is_reh=(reh_or_sup == "reh"), selection_method=selection_method,
-            custom_data_path=custom_data_path
-        )
+        # Use v2 (7-dataset intersection) for new_human or new_mouse
+        if reh_or_sup in ['new_human', 'new_mouse']:
+            X_train, X_test, y_train_encoded, y_test, cell_ids_test, scaler, label_encoder = load_and_preprocess_data_v2(
+                scaling_method=scaling_method, dataset=reh_or_sup, selection_method=selection_method
+            )
+        else:
+            X_train, X_test, y_train_encoded, y_test, cell_ids_test, scaler, label_encoder = load_and_preprocess_data(
+                scaling_method=scaling_method, is_reh=(reh_or_sup == "reh"), selection_method=selection_method,
+                custom_data_path=custom_data_path
+            )
 
         input_dim = X_train.shape[1]
         # Encode the labels
@@ -383,12 +389,18 @@ def perform_nested_cv_non_neural(
         print(f"\n=== [Outer Fold {outer_fold+1}/{outer_splits}] ===")
 
         # (A) Load data for this outer fold
-        X_train, X_test, y_train, y_test, cell_ids_test, scaler, label_encoder = load_and_preprocess_data(
-            scaling_method=scaling_method,
-            is_reh=(reh_or_sup == "reh"),
-            selection_method=selection_method,
-            custom_data_path=custom_data_path
-        )
+        # Use v2 (7-dataset intersection) for new_human or new_mouse
+        if reh_or_sup in ['new_human', 'new_mouse']:
+            X_train, X_test, y_train, y_test, cell_ids_test, scaler, label_encoder = load_and_preprocess_data_v2(
+                scaling_method=scaling_method, dataset=reh_or_sup, selection_method=selection_method
+            )
+        else:
+            X_train, X_test, y_train, y_test, cell_ids_test, scaler, label_encoder = load_and_preprocess_data(
+                scaling_method=scaling_method,
+                is_reh=(reh_or_sup == "reh"),
+                selection_method=selection_method,
+                custom_data_path=custom_data_path
+            )
 
         # (B) Align features
         selected_features = sorted(set(X_train.columns))
