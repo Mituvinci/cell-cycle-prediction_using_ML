@@ -34,13 +34,14 @@ def is_traditional_ml(model):
     return isinstance(model, sklearn.base.BaseEstimator)
 
 
-def extract_classwise_metrics(report_df, label_encoder):
+def extract_classwise_metrics(report_df, label_encoder, benchmark_prefix=""):
     """
     Extract class-wise metrics from classification report DataFrame.
 
     Args:
         report_df: DataFrame containing classification report
         label_encoder: LabelEncoder with class names
+        benchmark_prefix: Prefix for column names (e.g., "sup_", "gse146773_")
 
     Returns:
         dict: Class-wise metrics (precision, recall, f1-score, accuracy, MCC)
@@ -58,17 +59,17 @@ def extract_classwise_metrics(report_df, label_encoder):
         if cls in report_df.columns:
             # Precision, Recall, F1-score from classification report
             if 'precision' in report_df.index:
-                classwise_metrics[f'precision_{cls_lower}'] = report_df.loc['precision', cls]
+                classwise_metrics[f'{benchmark_prefix}precision_{cls_lower}'] = report_df.loc['precision', cls]
             if 'recall' in report_df.index:
-                classwise_metrics[f'recall_{cls_lower}'] = report_df.loc['recall', cls]
+                classwise_metrics[f'{benchmark_prefix}recall_{cls_lower}'] = report_df.loc['recall', cls]
             if 'f1-score' in report_df.index:
-                classwise_metrics[f'f1_{cls_lower}'] = report_df.loc['f1-score', cls]
+                classwise_metrics[f'{benchmark_prefix}f1-score_{cls_lower}'] = report_df.loc['f1-score', cls]
 
             # Accuracy and MCC from the added rows
             if 'Accuracy' in report_df.index:
-                classwise_metrics[f'accuracy_{cls_lower}'] = report_df.loc['Accuracy', cls]
+                classwise_metrics[f'{benchmark_prefix}accuracy_{cls_lower}'] = report_df.loc['Accuracy', cls]
             if 'MCC' in report_df.index:
-                classwise_metrics[f'mcc_{cls_lower}'] = report_df.loc['MCC', cls]
+                classwise_metrics[f'{benchmark_prefix}mcc_{cls_lower}'] = report_df.loc['MCC', cls]
 
     return classwise_metrics
 
@@ -95,15 +96,18 @@ def evaluate_on_benchmark(model, scaler, label_encoder, selected_features, model
         load_buettner_mesc
     )
 
+    # Detect if this is an old model (models/old_human/)
+    is_old_model = "old_human" in model_dir or "/old_human/" in model_dir
+
     # Load benchmark data
     if dataset_name == "SUP":
-        benchmark_features, benchmark_labels, _ = load_reh_or_sup_benchmark(scaler, reh_sup="sup")
+        benchmark_features, benchmark_labels, _ = load_reh_or_sup_benchmark(scaler, reh_sup="sup", is_old_model=is_old_model)
     elif dataset_name == "GSE146773":
-        benchmark_features, benchmark_labels, _ = load_gse146773(scaler, False)
+        benchmark_features, benchmark_labels, _ = load_gse146773(scaler, False, is_old_model=is_old_model)
     elif dataset_name == "GSE64016":
-        benchmark_features, benchmark_labels, _ = load_gse64016(scaler, False)
+        benchmark_features, benchmark_labels, _ = load_gse64016(scaler, False, is_old_model=is_old_model)
     elif dataset_name == "Buettner_mESC":
-        benchmark_features, benchmark_labels, _ = load_buettner_mesc(scaler, False)
+        benchmark_features, benchmark_labels, _ = load_buettner_mesc(scaler, False, is_old_model=is_old_model)
     else:
         raise ValueError(f"Invalid dataset name: {dataset_name}")
 
@@ -120,20 +124,22 @@ def evaluate_on_benchmark(model, scaler, label_encoder, selected_features, model
             model_dir, dataset_name=dataset_name
         )
 
-        # Extract class-wise metrics from report_df
-        classwise_metrics = extract_classwise_metrics(report_df, label_encoder)
+        # Create benchmark prefix (lowercase)
+        benchmark_prefix = dataset_name.lower().replace(" ", "_") + "_"
 
-        # Combine overall and class-wise metrics
+        # Extract class-wise metrics from report_df
+        classwise_metrics = extract_classwise_metrics(report_df, label_encoder, benchmark_prefix)
+
+        # Combine overall and class-wise metrics with benchmark prefix
         metrics = {
-            'dataset': dataset_name,
-            'accuracy': accuracy,
-            'f1': f1,
-            'precision': precision,
-            'recall': recall,
-            'roc_auc': roc_auc,
-            'balanced_acc': balanced_acc,
-            'mcc': mcc,
-            'kappa': kappa
+            f'{benchmark_prefix}accuracy': accuracy,
+            f'{benchmark_prefix}f1': f1,
+            f'{benchmark_prefix}precision': precision,
+            f'{benchmark_prefix}recall': recall,
+            f'{benchmark_prefix}roc_auc': roc_auc,
+            f'{benchmark_prefix}balanced_acc': balanced_acc,
+            f'{benchmark_prefix}mcc': mcc,
+            f'{benchmark_prefix}kappa': kappa
         }
         metrics.update(classwise_metrics)
         return metrics
@@ -166,20 +172,23 @@ def evaluate_on_benchmark(model, scaler, label_encoder, selected_features, model
             model_dir, dataset_name=dataset_name
         )
 
-        # Extract class-wise metrics from report_df
-        classwise_metrics = extract_classwise_metrics(report_df, label_encoder)
+        # Create benchmark prefix (lowercase)
+        benchmark_prefix = dataset_name.lower().replace(" ", "_") + "_"
 
-        # Combine overall and class-wise metrics
+        # Extract class-wise metrics from report_df
+        classwise_metrics = extract_classwise_metrics(report_df, label_encoder, benchmark_prefix)
+
+        # Combine overall and class-wise metrics with benchmark prefix
         metrics = {
-            'dataset': dataset_name,
-            'accuracy': accuracy,
-            'f1': f1,
-            'precision': precision,
-            'recall': recall,
-            'roc_auc': roc_auc,
-            'balanced_acc': balanced_acc,
-            'mcc': mcc,
-            'kappa': kappa
+            f'{benchmark_prefix}accuracy': accuracy,
+            f'{benchmark_prefix}loss': test_loss,
+            f'{benchmark_prefix}f1': f1,
+            f'{benchmark_prefix}precision': precision,
+            f'{benchmark_prefix}recall': recall,
+            f'{benchmark_prefix}roc_auc': roc_auc,
+            f'{benchmark_prefix}balanced_acc': balanced_acc,
+            f'{benchmark_prefix}mcc': mcc,
+            f'{benchmark_prefix}kappa': kappa
         }
         metrics.update(classwise_metrics)
         return metrics
@@ -254,8 +263,8 @@ def main():
     print(f"✓ Model loaded successfully ({model_category})")
     print(f"{'='*80}\n")
 
-    # Evaluate on selected benchmarks
-    results = []
+    # Evaluate on selected benchmarks and collect results in WIDE format
+    wide_results = {'prefix_name': model_name}
 
     for dataset_name in args.benchmarks:
         print(f"{'='*80}")
@@ -266,9 +275,13 @@ def main():
             model, scaler, label_encoder, selected_features,
             model_dir, dataset_name, is_tml=is_tml
         )
-        results.append(metrics)
 
-        print(f"  Accuracy: {metrics['accuracy']:.2f}%")
+        # Add all metrics with benchmark prefix to wide_results
+        wide_results.update(metrics)
+
+        # Print accuracy (need to extract from prefixed key)
+        benchmark_prefix = dataset_name.lower().replace(" ", "_") + "_"
+        print(f"  Accuracy: {metrics[f'{benchmark_prefix}accuracy']:.2f}%")
         print(f"{'='*80}\n")
 
     # Evaluate on custom benchmark if provided
@@ -316,38 +329,37 @@ def main():
                 model_dir, dataset_name=args.custom_benchmark_name
             )
 
+        # Create benchmark prefix for custom benchmark (lowercase)
+        custom_prefix = args.custom_benchmark_name.lower().replace(" ", "_") + "_"
+
         # Extract class-wise metrics
-        classwise_metrics = extract_classwise_metrics(report_df, label_encoder)
+        classwise_metrics = extract_classwise_metrics(report_df, label_encoder, custom_prefix)
 
         custom_metrics = {
-            'dataset': args.custom_benchmark_name,
-            'accuracy': accuracy,
-            'f1': f1,
-            'precision': precision,
-            'recall': recall,
-            'roc_auc': roc_auc,
-            'balanced_acc': balanced_acc,
-            'mcc': mcc,
-            'kappa': kappa
+            f'{custom_prefix}accuracy': accuracy,
+            f'{custom_prefix}f1': f1,
+            f'{custom_prefix}precision': precision,
+            f'{custom_prefix}recall': recall,
+            f'{custom_prefix}roc_auc': roc_auc,
+            f'{custom_prefix}balanced_acc': balanced_acc,
+            f'{custom_prefix}mcc': mcc,
+            f'{custom_prefix}kappa': kappa
         }
         custom_metrics.update(classwise_metrics)
-        results.append(custom_metrics)
 
-        print(f"  Accuracy: {custom_metrics['accuracy']:.2f}%")
+        # Add custom metrics to wide_results
+        wide_results.update(custom_metrics)
+
+        print(f"  Accuracy: {custom_metrics[f'{custom_prefix}accuracy']:.2f}%")
         print(f"{'='*80}\n")
 
-    # Create results DataFrame
-    results_df = pd.DataFrame(results)
-    results_df.insert(0, 'model', model_name)
+    # Create results DataFrame (WIDE format - one row with all benchmarks)
+    results_df = pd.DataFrame([wide_results])
 
-    # Save results
+    # Save results as *_details_benchmark.csv
     if args.output is None:
-        output_dir = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            'results'
-        )
-        os.makedirs(output_dir, exist_ok=True)
-        args.output = os.path.join(output_dir, f"{model_name}_all_benchmarks.csv")
+        # Save in same directory as model file
+        args.output = os.path.join(model_dir, f"{model_name}_details_benchmark.csv")
     else:
         os.makedirs(os.path.dirname(args.output), exist_ok=True)
 
@@ -357,9 +369,22 @@ def main():
     print(f"\n{'='*80}")
     print(f"SUMMARY - Accuracies")
     print(f"{'='*80}")
-    for _, row in results_df.iterrows():
-        print(f"{row['dataset']:15s}: {row['accuracy']:6.2f}%")
-    print(f"\n✅ Full results saved to: {args.output}")
+
+    # Print accuracy for each benchmark evaluated
+    for dataset_name in args.benchmarks:
+        benchmark_prefix = dataset_name.lower().replace(" ", "_") + "_"
+        accuracy_key = f'{benchmark_prefix}accuracy'
+        if accuracy_key in wide_results:
+            print(f"{dataset_name:15s}: {wide_results[accuracy_key]:6.2f}%")
+
+    # Print custom benchmark accuracy if evaluated
+    if args.custom_benchmark is not None:
+        custom_prefix = args.custom_benchmark_name.lower().replace(" ", "_") + "_"
+        accuracy_key = f'{custom_prefix}accuracy'
+        if accuracy_key in wide_results:
+            print(f"{args.custom_benchmark_name:15s}: {wide_results[accuracy_key]:6.2f}%")
+
+    print(f"\n✅ Results saved to: {args.output}")
     print(f"{'='*80}\n")
 
 

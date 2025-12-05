@@ -23,6 +23,72 @@ from imblearn.over_sampling import SMOTE, ADASYN
 from imblearn.under_sampling import RandomUnderSampler, ClusterCentroids
 
 
+def match_scaler_feature_format(df, scaler, exclude_cols=['gex_barcode', 'Predicted', 'Cell_ID', 'cell', 'phase', 'Phase']):
+    """
+    Automatically detects the scaler's feature name format and applies the same format to DataFrame.
+
+    Supports:
+    - ALL UPPERCASE: "AAAS", "ACTB" (old human models)
+    - Title Case: "Aaas", "Actb" (new 7-dataset models)
+    - all lowercase: "aaas", "actb" (rare, but supported)
+
+    Parameters:
+    -----------
+    df : pd.DataFrame
+        DataFrame with gene columns
+    scaler : sklearn scaler object
+        Fitted scaler with feature_names_in_ attribute
+    exclude_cols : list
+        Columns to exclude from transformation (metadata columns)
+
+    Returns:
+    --------
+    pd.DataFrame
+        DataFrame with feature names matching scaler format
+    """
+    # Get a sample feature from scaler to detect format
+    if not hasattr(scaler, 'feature_names_in_') or len(scaler.feature_names_in_) == 0:
+        return df
+
+    sample_feature = str(scaler.feature_names_in_[0])
+
+    # Detect format
+    if sample_feature.isupper():
+        # ALL UPPERCASE format (old models)
+        target_format = 'upper'
+    elif sample_feature[0].isupper() and not sample_feature.isupper():
+        # Title Case format (new models)
+        target_format = 'capitalize'
+    elif sample_feature.islower():
+        # all lowercase format
+        target_format = 'lower'
+    else:
+        # Mixed case, assume capitalize as default
+        target_format = 'capitalize'
+
+    # Apply the detected format
+    rename_dict = {}
+    for col in df.columns:
+        if col not in exclude_cols:
+            if target_format == 'upper':
+                transformed = col.upper()
+            elif target_format == 'capitalize':
+                transformed = col.capitalize()
+            elif target_format == 'lower':
+                transformed = col.lower()
+            else:
+                transformed = col
+
+            if transformed != col:
+                rename_dict[col] = transformed
+
+    # Rename columns
+    if rename_dict:
+        df = df.rename(columns=rename_dict)
+
+    return df
+
+
 def capitalize_gene_names(df, exclude_cols=['gex_barcode', 'Predicted', 'Cell_ID', 'cell', 'phase', 'Phase']):
     """
     Capitalizes all gene names in a DataFrame (first letter uppercase, rest lowercase).
@@ -564,18 +630,16 @@ def preprocess_benchmark_data(data, title, check_feature=False):
     return (X_labeled, y_labeled, cell_ids_labeled)
 
 
-def data_preprocess_GSE(data, scaler, dataset_name, check_feature=False):
+def data_preprocess_GSE(data, scaler, dataset_name, check_feature=False, is_old_model=False):
     """
     Preprocesses a GSE benchmark data file.
-
-    EXACT implementation from user's original code.
-    Simply filters to expected features - NO adding zeros for missing genes!
 
     Args:
         data (pd.DataFrame): Raw GSE data.
         scaler: Fitted scaler object.
         dataset_name (str): Dataset name.
         check_feature (bool): Whether to check feature overlap.
+        is_old_model (bool): If True, skip capitalization (for old models). Default False.
 
     Returns:
         tuple: (X_labeled, y_labeled, cell_ids_labeled)
@@ -583,26 +647,50 @@ def data_preprocess_GSE(data, scaler, dataset_name, check_feature=False):
     """
     X_labeled, y_labeled, cell_ids_labeled = preprocess_benchmark_data(data, dataset_name, check_feature)
 
-    # Simply filter to expected features (matching scaler)
-    # If features are missing, this will raise KeyError - which is correct!
+    # For old models: NO capitalization, keep original gene names
+    # For new models: Match feature format to scaler
+    if not is_old_model:
+        X_labeled = match_scaler_feature_format(X_labeled, scaler)
+
+    # Get expected features
     expected_features = scaler.feature_names_in_
-    X_labeled = X_labeled[expected_features]
+
+    # For old models: Handle missing genes with mean imputation
+    # For new models: Raise KeyError if genes missing
+    if is_old_model:
+        missing_genes = set(expected_features) - set(X_labeled.columns)
+        if missing_genes:
+            print(f"  {dataset_name}: {len(missing_genes)} missing genes, using zero imputation")
+            # Fill missing genes with 0 (safe for TML models like AdaBoost)
+            missing_df = pd.DataFrame(0, index=X_labeled.index, columns=list(missing_genes))
+            X_labeled = pd.concat([X_labeled, missing_df], axis=1)
+
+        # Reorder to match scaler
+        X_labeled = X_labeled[expected_features]
+    else:
+        # New models: strict matching, raise error if missing
+        X_labeled = X_labeled[expected_features]
 
     # Apply scaling
     X_labeled = scaling_benchmark(X_labeled, scaler)
 
+    # Ensure no NaN values (both old and new models)
+    if X_labeled.isna().any().any():
+        nan_count = X_labeled.isna().sum().sum()
+        print(f"  WARNING: {dataset_name} has {nan_count} NaN values after scaling, filling with 0")
+        X_labeled = X_labeled.fillna(0)
+
     return X_labeled, y_labeled, cell_ids_labeled
 
 
-def load_reh_or_sup_benchmark(scaler, reh_sup="sup"):
+def load_reh_or_sup_benchmark(scaler, reh_sup="sup", is_old_model=False):
     """
     Loads REH or SUP benchmark data.
-
-    EXACT implementation from 1_0_principle_aurelien_ml.py line 702-742
 
     Args:
         scaler: Fitted scaler object.
         reh_sup (str): "reh" or "sup" to select dataset.
+        is_old_model (bool): If True, skip capitalization (for old models). Default False.
 
     Returns:
         tuple: (X_labeled, y_labeled, cell_ids_labeled)
@@ -627,9 +715,6 @@ def load_reh_or_sup_benchmark(scaler, reh_sup="sup"):
     # Load the RNA datasets
     data = pd.read_csv(path)
 
-    # Capitalize all gene names for species independence
-    data = capitalize_gene_names(data)
-
     data_with_label = data.dropna(subset=['Predicted'])
 
     # Extract labels and cell IDs
@@ -649,23 +734,52 @@ def load_reh_or_sup_benchmark(scaler, reh_sup="sup"):
         col.replace('{', '').replace('}', '').replace(':', '') for col in X_labeled.columns
     ]
 
+    # For old models: NO capitalization, keep original gene names
+    # For new models: Match feature format to scaler
+    if not is_old_model:
+        X_labeled = match_scaler_feature_format(X_labeled, scaler)
+
     # Ensure that the return value is a DataFrame
-    X_labeled = pd.DataFrame(X_labeled, columns=data_with_label.drop(columns=['Predicted']).columns)
-    X_labeled = X_labeled[scaler.feature_names_in_]
+    X_labeled = pd.DataFrame(X_labeled, columns=X_labeled.columns)
+
+    # Get expected features
+    expected_features = scaler.feature_names_in_
+
+    # For old models: Handle missing genes with mean imputation
+    # For new models: Raise KeyError if genes missing
+    if is_old_model:
+        missing_genes = set(expected_features) - set(X_labeled.columns)
+        if missing_genes:
+            print(f"  {reh_sup.upper()}: {len(missing_genes)} missing genes, using zero imputation")
+            # Fill missing genes with 0 (safe for TML models like AdaBoost)
+            missing_df = pd.DataFrame(0, index=X_labeled.index, columns=list(missing_genes))
+            X_labeled = pd.concat([X_labeled, missing_df], axis=1)
+
+        # Reorder to match scaler
+        X_labeled = X_labeled[expected_features]
+    else:
+        # New models: strict matching, raise error if missing
+        X_labeled = X_labeled[expected_features]
+
     X_labeled = scaling_benchmark(X_labeled, scaler)
+
+    # Ensure no NaN values (both old and new models)
+    if X_labeled.isna().any().any():
+        nan_count = X_labeled.isna().sum().sum()
+        print(f"  WARNING: {reh_sup.upper()} has {nan_count} NaN values after scaling, filling with 0")
+        X_labeled = X_labeled.fillna(0)
 
     return X_labeled, y_labeled, cell_ids_labeled
 
 
-def load_gse146773(scaler, check_feature=False):
+def load_gse146773(scaler, check_feature=False, is_old_model=False):
     """
     Loads and preprocesses the GSE146773 benchmark data.
-
-    EXACT implementation from 1_0_principle_aurelien_ml.py line 745-786
 
     Args:
         scaler: Fitted scaler object.
         check_feature (bool): Whether to check feature overlap.
+        is_old_model (bool): If True, skip capitalization (for old models). Default False.
 
     Returns:
         tuple: (benchmark_features, benchmark_labels, benchmark_cell_ids)
@@ -696,21 +810,20 @@ def load_gse146773(scaler, check_feature=False):
 
     # Preprocess the benchmark data
     benchmark_features, benchmark_labels, benchmark_cell_ids = data_preprocess_GSE(
-        data_gse_benchmark, scaler, "GSE146773", check_feature
+        data_gse_benchmark, scaler, "GSE146773", check_feature, is_old_model
     )
 
     return benchmark_features, benchmark_labels, benchmark_cell_ids
 
 
-def load_gse64016(scaler, check_feature=False):
+def load_gse64016(scaler, check_feature=False, is_old_model=False):
     """
     Loads and preprocesses the GSE64016 benchmark data.
-
-    EXACT implementation from 1_0_principle_aurelien_ml.py line 789-842
 
     Args:
         scaler: Fitted scaler object.
         check_feature (bool): Whether to check feature overlap.
+        is_old_model (bool): If True, skip capitalization (for old models). Default False.
 
     Returns:
         tuple: (benchmark_features, benchmark_labels, benchmark_cell_ids)
@@ -752,19 +865,20 @@ def load_gse64016(scaler, check_feature=False):
 
     # Preprocess the benchmark data
     benchmark_features, benchmark_labels, benchmark_cell_ids = data_preprocess_GSE(
-        data_gse_benchmark, scaler, "GSE64016", check_feature
+        data_gse_benchmark, scaler, "GSE64016", check_feature, is_old_model
     )
 
     return benchmark_features, benchmark_labels, benchmark_cell_ids
 
 
-def load_buettner_mesc(scaler, check_feature=False):
+def load_buettner_mesc(scaler, check_feature=False, is_old_model=False):
     """
     Loads and preprocesses the Buettner mESC benchmark data.
 
     Args:
         scaler: Fitted scaler object.
         check_feature (bool): Whether to check feature overlap.
+        is_old_model (bool): If True, capitalize + mean imputation for missing genes. Default False.
 
     Returns:
         tuple: (benchmark_features, benchmark_labels, benchmark_cell_ids)
@@ -801,10 +915,6 @@ def load_buettner_mesc(scaler, check_feature=False):
     # Rename columns to keep consistent naming
     data_buettner_benchmark.rename(columns={'Phase': 'Predicted', 'Cell_ID': 'gex_barcode'}, inplace=True)
 
-    # NOTE: NOT capitalizing gene names for old model compatibility
-    # Old models were trained with original gene name format
-    # data_buettner_benchmark = capitalize_gene_names(data_buettner_benchmark)
-
     # Standardize phase labels (if needed)
     # Map common variations to standard G1, S, G2M format
     phase_mapping = {
@@ -820,10 +930,45 @@ def load_buettner_mesc(scaler, check_feature=False):
     )
     data_buettner_benchmark = data_buettner_benchmark.dropna(subset=['Predicted'])
 
-    # Preprocess the benchmark data
-    benchmark_features, benchmark_labels, benchmark_cell_ids = data_preprocess_GSE(
-        data_buettner_benchmark, scaler, "Buettner_mESC", check_feature
-    )
+    # OLD MODELS: Capitalize + mean imputation for missing genes
+    # NEW MODELS: Match scaler format
+    if is_old_model:
+        # Always capitalize for Buettner with old models
+        data_buettner_benchmark = match_scaler_feature_format(data_buettner_benchmark, scaler)
+
+        # Extract features and labels
+        X_labeled, y_labeled, cell_ids_labeled = preprocess_benchmark_data(
+            data_buettner_benchmark, "Buettner_mESC", check_feature
+        )
+
+        # Handle missing genes with zero imputation
+        expected_features = scaler.feature_names_in_
+        missing_genes = set(expected_features) - set(X_labeled.columns)
+
+        if missing_genes:
+            print(f"  Buettner missing {len(missing_genes)} genes, using zero imputation")
+            # Fill missing genes with 0 (safe for TML models like AdaBoost)
+            missing_df = pd.DataFrame(0, index=X_labeled.index, columns=list(missing_genes))
+            X_labeled = pd.concat([X_labeled, missing_df], axis=1)
+
+        # Reorder to match scaler
+        X_labeled = X_labeled[expected_features]
+
+        # Apply scaling
+        benchmark_features = scaling_benchmark(X_labeled, scaler)
+        benchmark_labels = y_labeled
+        benchmark_cell_ids = cell_ids_labeled
+    else:
+        # New models: use standard preprocessing
+        benchmark_features, benchmark_labels, benchmark_cell_ids = data_preprocess_GSE(
+            data_buettner_benchmark, scaler, "Buettner_mESC", check_feature, is_old_model
+        )
+
+    # Ensure no NaN values (both old and new models)
+    if benchmark_features.isna().any().any():
+        nan_count = benchmark_features.isna().sum().sum()
+        print(f"  WARNING: Buettner has {nan_count} NaN values, filling with 0")
+        benchmark_features = benchmark_features.fillna(0)
 
     return benchmark_features, benchmark_labels, benchmark_cell_ids
 
@@ -858,8 +1003,8 @@ def load_custom_benchmark(custom_benchmark_path, scaler, benchmark_name="CustomB
     # Rename to standard format
     data_custom_benchmark.rename(columns={first_col: 'gex_barcode', second_col: 'Predicted'}, inplace=True)
 
-    # Capitalize all gene names for species independence
-    data_custom_benchmark = capitalize_gene_names(data_custom_benchmark)
+    # Match feature format to scaler (auto-detects UPPERCASE vs Title Case)
+    data_custom_benchmark = match_scaler_feature_format(data_custom_benchmark, scaler)
 
     print(f"  Loaded {len(data_custom_benchmark)} cells")
     print(f"  Features: {len(data_custom_benchmark.columns) - 2} genes")

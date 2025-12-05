@@ -214,7 +214,7 @@ def optimize_model_with_optuna(
     best_params = study.best_params
 
     # Manually add epochs (NOT optimized by Optuna - early stopping handles optimal epochs)
-    best_params['epochs'] = 100  # For testing (change to 1500 for full training)
+    best_params['epochs'] = 1500  # For testing (change to 1500 for full training)
 
     print(f"\nBest parameters for {model_type}: {best_params}")
 
