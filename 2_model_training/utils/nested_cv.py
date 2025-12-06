@@ -101,14 +101,15 @@ def perform_nested_cv_dn(
         print(f"{'='*80}\n")
 
         # Load and preprocess data
-        # Use v2 (7-dataset intersection) for new_human or new_mouse
-        if reh_or_sup in ['new_human', 'new_mouse']:
+        # Use v2 (7-dataset intersection) for new_human, new_mouse, or reh
+        if reh_or_sup in ['new_human', 'new_mouse', 'reh']:
             X_train, X_test, y_train_encoded, y_test, cell_ids_test, scaler, label_encoder = load_and_preprocess_data_v2(
                 scaling_method=scaling_method, dataset=reh_or_sup, selection_method=selection_method
             )
         else:
+            # Only SUP uses old format (non-intersection)
             X_train, X_test, y_train_encoded, y_test, cell_ids_test, scaler, label_encoder = load_and_preprocess_data(
-                scaling_method=scaling_method, is_reh=(reh_or_sup == "reh"), selection_method=selection_method,
+                scaling_method=scaling_method, is_reh=False, selection_method=selection_method,
                 custom_data_path=custom_data_path
             )
 
@@ -389,15 +390,16 @@ def perform_nested_cv_non_neural(
         print(f"\n=== [Outer Fold {outer_fold+1}/{outer_splits}] ===")
 
         # (A) Load data for this outer fold
-        # Use v2 (7-dataset intersection) for new_human or new_mouse
-        if reh_or_sup in ['new_human', 'new_mouse']:
+        # Use v2 (7-dataset intersection) for new_human, new_mouse, or reh
+        if reh_or_sup in ['new_human', 'new_mouse', 'reh']:
             X_train, X_test, y_train, y_test, cell_ids_test, scaler, label_encoder = load_and_preprocess_data_v2(
                 scaling_method=scaling_method, dataset=reh_or_sup, selection_method=selection_method
             )
         else:
+            # Only SUP uses old format (non-intersection)
             X_train, X_test, y_train, y_test, cell_ids_test, scaler, label_encoder = load_and_preprocess_data(
                 scaling_method=scaling_method,
-                is_reh=(reh_or_sup == "reh"),
+                is_reh=False,
                 selection_method=selection_method,
                 custom_data_path=custom_data_path
             )
@@ -463,9 +465,6 @@ def perform_nested_cv_non_neural(
         model_filename = f"{prefix_name}.joblib"
         model_filepath = os.path.join(save_model_here, model_filename)
         joblib.dump(best_model, model_filepath)
-
-        X_train_filename = os.path.join(save_model_here, f"{prefix_name}_X_train.csv")
-        X_train.to_csv(X_train_filename, index=False)
 
         params_filename = f"{prefix_name}_params.txt"
         params_filepath = os.path.join(save_model_here, params_filename)

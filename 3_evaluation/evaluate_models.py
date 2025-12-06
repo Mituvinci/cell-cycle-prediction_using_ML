@@ -74,7 +74,7 @@ def extract_classwise_metrics(report_df, label_encoder, benchmark_prefix=""):
     return classwise_metrics
 
 
-def evaluate_on_benchmark(model, scaler, label_encoder, selected_features, model_dir, dataset_name, is_tml=False):
+def evaluate_on_benchmark(model, scaler, label_encoder, selected_features, model_dir, dataset_name, is_tml=False, scaling_method='simple'):
     """
     Evaluate model on a single benchmark dataset.
 
@@ -85,6 +85,8 @@ def evaluate_on_benchmark(model, scaler, label_encoder, selected_features, model
         selected_features: List of feature names
         model_dir: Model directory path
         dataset_name: "SUP", "GSE146773", "GSE64016", or "Buettner_mESC"
+        is_tml: Whether model is traditional ML
+        scaling_method: 'simple' (no double normalization) or 'double' (old method)
 
     Returns:
         dict: Evaluation metrics (overall + class-wise)
@@ -101,26 +103,82 @@ def evaluate_on_benchmark(model, scaler, label_encoder, selected_features, model
 
     # Load benchmark data
     if dataset_name == "SUP":
-        benchmark_features, benchmark_labels, _ = load_reh_or_sup_benchmark(scaler, reh_sup="sup", is_old_model=is_old_model)
+        benchmark_features, benchmark_labels, _ = load_reh_or_sup_benchmark(scaler, reh_sup="sup", is_old_model=is_old_model, scaling_method=scaling_method)
     elif dataset_name == "GSE146773":
-        benchmark_features, benchmark_labels, _ = load_gse146773(scaler, False, is_old_model=is_old_model)
+        benchmark_features, benchmark_labels, _ = load_gse146773(scaler, False, is_old_model=is_old_model, scaling_method=scaling_method)
     elif dataset_name == "GSE64016":
-        benchmark_features, benchmark_labels, _ = load_gse64016(scaler, False, is_old_model=is_old_model)
+        benchmark_features, benchmark_labels, _ = load_gse64016(scaler, False, is_old_model=is_old_model, scaling_method=scaling_method)
     elif dataset_name == "Buettner_mESC":
-        benchmark_features, benchmark_labels, _ = load_buettner_mesc(scaler, False, is_old_model=is_old_model)
+        benchmark_features, benchmark_labels, _ = load_buettner_mesc(scaler, False, is_old_model=is_old_model, scaling_method=scaling_method)
     else:
         raise ValueError(f"Invalid dataset name: {dataset_name}")
 
+    # DEBUG: Print feature names comparison
+    print(f"\n[DEBUG] Feature Names Comparison for {dataset_name}")
+    print(f"{'='*80}")
+
+    # Training features (what model expects)
+    training_features = list(selected_features)
+    print(f"TRAINING FEATURES (Total: {len(training_features)})")
+    print(f"  First 10: {training_features[:10]}")
+    print(f"  Last 10:  {training_features[-10:]}")
+    print()
+
+    # Benchmark features (what dataset provides)
+    benchmark_feature_names = list(benchmark_features.columns)
+    print(f"BENCHMARK FEATURES - {dataset_name} BEFORE REORDERING (Total: {len(benchmark_feature_names)})")
+    print(f"  First 10: {benchmark_feature_names[:10]}")
+    print(f"  Last 10:  {benchmark_feature_names[-10:]}")
+    print()
+
+    print(f"BEFORE REORDERING - First 5 rows x 5 columns:")
+    print(benchmark_features.iloc[:5, :5])
+    print()
+
+    # Check for missing features
+    missing_in_benchmark = set(training_features) - set(benchmark_feature_names)
+    missing_in_training = set(benchmark_feature_names) - set(training_features)
+
+    if missing_in_benchmark:
+        print(f"WARNING: {len(missing_in_benchmark)} training features NOT found in {dataset_name} benchmark!")
+        print(f"  First 10 missing: {list(missing_in_benchmark)[:10]}")
+        raise ValueError(f"Cannot evaluate: {len(missing_in_benchmark)} features missing from benchmark!")
+
+    if missing_in_training:
+        print(f"INFO: {len(missing_in_training)} extra features in {dataset_name} benchmark (will be ignored)")
+
+    # CRITICAL FIX: Reorder benchmark features to EXACTLY match training feature order
+    print(f"\nREORDERING benchmark features to match training order...")
+    benchmark_features = benchmark_features[training_features]
+
+    # Verify reordering worked
+    reordered_cols = list(benchmark_features.columns)
+    print(f"AFTER REORDERING:")
+    print(f"  First 10: {reordered_cols[:10]}")
+    print(f"  Last 10:  {reordered_cols[-10:]}")
+    print(f"  Order matches training: {reordered_cols == training_features}")
+    print(f"  NaN values: {benchmark_features.isna().sum().sum()}")
+    print()
+
+    print(f"AFTER REORDERING - First 5 rows x 5 columns:")
+    print(benchmark_features.iloc[:5, :5])
+    print()
+
+    if reordered_cols != training_features:
+        raise ValueError("Feature reordering FAILED! Column order still doesn't match training!")
+    if benchmark_features.isna().sum().sum() > 0:
+        raise ValueError(f"NaN values detected after reordering! This will cause evaluation errors.")
+
+    print(f"SUCCESS: Feature order verified and matched!")
+    print(f"{'='*80}\n")
+
     if is_tml:
         # Traditional ML evaluation (sklearn models)
-        # IMPORTANT: TML models need only the selected features (after feature selection)
-        # Filter benchmark_features to match the exact features used during training
-        benchmark_features_filtered = benchmark_features[selected_features]
-
+        # Features are already reordered above to match training order
         benchmark_labels_encoded = label_encoder.transform(benchmark_labels)
 
         accuracy, f1, precision, recall, roc_auc, balanced_acc, mcc, kappa, _, report_df = evaluate_model_non_neural(
-            model, benchmark_features_filtered, benchmark_labels_encoded, label_encoder,
+            model, benchmark_features, benchmark_labels_encoded, label_encoder,
             model_dir, dataset_name=dataset_name
         )
 
@@ -145,17 +203,14 @@ def evaluate_on_benchmark(model, scaler, label_encoder, selected_features, model
         return metrics
     else:
         # Deep Learning evaluation (PyTorch models)
-        # IMPORTANT: DL models also need only the selected features (after feature selection)
-        # Filter benchmark_features to match the exact features used during training
-        benchmark_features_filtered = benchmark_features[selected_features]
-
+        # Features are already reordered above to match training order
         benchmark_labels_encoded = torch.tensor(
             label_encoder.transform(benchmark_labels),
             dtype=torch.long
         ).to(device)
 
         benchmark_tensor = torch.tensor(
-            benchmark_features_filtered.values,
+            benchmark_features.values,
             dtype=torch.float32
         ).to(device)
 
@@ -230,6 +285,13 @@ def main():
         default='CustomBenchmark',
         help='Name for custom benchmark (used in output files)'
     )
+    parser.add_argument(
+        '--scaling_method',
+        type=str,
+        choices=['simple', 'double'],
+        default='simple',
+        help='Scaling method for benchmarks: simple (correct - no double normalization) or double (old method with double normalization). Default: simple'
+    )
 
     args = parser.parse_args()
 
@@ -251,6 +313,7 @@ def main():
     print(f"LOADING MODEL")
     print(f"{'='*80}")
     print(f"Model: {os.path.basename(args.model_path)}")
+    print(f"Scaling method: {args.scaling_method}")
 
     model, scaler, label_encoder, selected_features = load_model_components(args.model_path)
     model_dir = os.path.dirname(args.model_path)
@@ -260,7 +323,7 @@ def main():
     is_tml = is_traditional_ml(model)
     model_category = "Traditional ML" if is_tml else "Deep Learning"
 
-    print(f"✓ Model loaded successfully ({model_category})")
+    print(f"Model loaded successfully ({model_category})")
     print(f"{'='*80}\n")
 
     # Evaluate on selected benchmarks and collect results in WIDE format
@@ -273,7 +336,7 @@ def main():
 
         metrics = evaluate_on_benchmark(
             model, scaler, label_encoder, selected_features,
-            model_dir, dataset_name, is_tml=is_tml
+            model_dir, dataset_name, is_tml=is_tml, scaling_method=args.scaling_method
         )
 
         # Add all metrics with benchmark prefix to wide_results

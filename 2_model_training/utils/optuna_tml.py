@@ -71,7 +71,7 @@ def objective(trial, X_train_inner, y_train_inner, X_val, y_val, model_type):
             "num_leaves": trial.suggest_int("num_leaves", 20, 100),
             "boosting_type": trial.suggest_categorical("boosting_type", ["gbdt", "dart"]),
         }
-        model = LGBMClassifier(**params, device="gpu")
+        model = LGBMClassifier(**params, device="cpu")
 
     else:
         raise ValueError("Invalid model type")
@@ -129,7 +129,7 @@ def optimize_traditional_model(X_train, y_train, X_train_inner, y_train_inner, X
     elif model_type == "random_forest":
         best_model = RandomForestClassifier(**best_params, class_weight="balanced")
     elif model_type == "lgbm":
-        best_model = LGBMClassifier(**best_params, device="gpu")
+        best_model = LGBMClassifier(**best_params, device="cpu")
 
     best_model.fit(X_train, y_train)
 

@@ -28,7 +28,7 @@ from collections import Counter
 from sklearn.metrics import (
     classification_report, confusion_matrix, ConfusionMatrixDisplay,
     balanced_accuracy_score, matthews_corrcoef, cohen_kappa_score,
-    roc_auc_score, log_loss
+    roc_auc_score, log_loss, accuracy_score
 )
 import matplotlib.pyplot as plt
 import optuna
@@ -303,9 +303,24 @@ def evaluate_model(model, data_loader, criterion, label_encoder, save_dir, datas
 
     report_df = pd.DataFrame(report)
 
+    # Class-wise Accuracy and MCC (same as TML evaluation)
+    classwise_accuracy = {}
+    classwise_mcc = {}
+    for idx, cls in enumerate(label_encoder.classes_):
+        mask = (np.array(y_true) == idx)
+        class_acc = accuracy_score(np.array(y_true)[mask], np.array(y_pred)[mask])
+        bin_true = (np.array(y_true) == idx).astype(int)
+        bin_pred = (np.array(y_pred) == idx).astype(int)
+        class_mcc = matthews_corrcoef(bin_true, bin_pred)
+        classwise_accuracy[cls] = class_acc
+        classwise_mcc[cls] = class_mcc
 
+    accuracy_df = pd.DataFrame({"Accuracy": classwise_accuracy, "MCC": classwise_mcc})
+    accuracy_df_T = accuracy_df.T
+    report_df = pd.concat([report_df, accuracy_df_T], axis=0)
+    report_df = report_df * 100.0
 
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=label_encoder.classes_)  # Adjust class names if needed
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=label_encoder.classes_)
     fig, ax = plt.subplots(figsize=(5, 5))
     disp.plot(ax=ax)
     plt.title(f'Confusion Matrix - {dataset_name}')
