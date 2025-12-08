@@ -21,7 +21,7 @@ import pandas as pd
 import psutil
 import joblib
 
-from .data_utils import load_and_preprocess_data, load_and_preprocess_data_v2
+from .data_utils import load_and_preprocess_data
 from .optuna_utils import optimize_model_with_optuna
 from .training_utils import train_model, evaluate_model
 from .visualization import plot_training_history, plot_validation_accuracy
@@ -31,18 +31,16 @@ from sklearn.model_selection import train_test_split
 
 def perform_nested_cv_dn(
     model_type="simpledense",
-    reh_or_sup="reh",
+    dataset="hpsc",
     save_model_here=None,
     selection_method=None,
     scaling_method="standard",
     n_trials=2,
     cv=5,
-    custom_data_path=None
+    gene_list_path=None
 ):
     """
     Performs nested cross-validation for PyTorch models.
-
-    EXACT implementation from 1_0_principle_aurelien_ml.py line 2171-2570
 
     This is THE MAIN TRAINING FUNCTION that:
     1. Performs K-fold cross-validation
@@ -54,12 +52,13 @@ def perform_nested_cv_dn(
     Args:
         model_type (str): Type of model to use ('simpledense', 'deepdense', 'cnn', 'hbdcnn', 'fe').
                           Defaults to 'simpledense'.
-        reh_or_sup (str): Specifies whether to use REH or SUP data for training. Defaults to 'reh'.
+        dataset (str): Dataset to use ('hpsc', 'pbmc', 'mouse_brain', 'reh', 'sup'). Defaults to 'hpsc'.
         save_model_here (str): Path to the directory where models should be saved.
         selection_method (str): Feature selection method (None, 'SelectKBest', 'ElasticCV'). Defaults to None.
         scaling_method (str): Scaling method ('standard', 'minmax', 'robust'). Defaults to 'standard'.
         n_trials (int): Number of Optuna trials for hyperparameter optimization. Defaults to 2.
         cv (int): Number of cross-validation folds. Defaults to 5.
+        gene_list_path (str): Path to gene list file (one gene per line, UPPERCASE). REQUIRED.
 
     Note:
         Training uses fixed max_epochs=100 with early_stopping_patience=100 (for testing).
@@ -100,18 +99,10 @@ def perform_nested_cv_dn(
         print(f"Outer Fold: {outer_fold + 1}/{how_many_fold}")
         print(f"{'='*80}\n")
 
-        # Load and preprocess data
-        # Use v2 (7-dataset intersection) for new_human, new_mouse, or reh
-        if reh_or_sup in ['new_human', 'new_mouse', 'reh']:
-            X_train, X_test, y_train_encoded, y_test, cell_ids_test, scaler, label_encoder = load_and_preprocess_data_v2(
-                scaling_method=scaling_method, dataset=reh_or_sup, selection_method=selection_method
-            )
-        else:
-            # Only SUP uses old format (non-intersection)
-            X_train, X_test, y_train_encoded, y_test, cell_ids_test, scaler, label_encoder = load_and_preprocess_data(
-                scaling_method=scaling_method, is_reh=False, selection_method=selection_method,
-                custom_data_path=custom_data_path
-            )
+        # Load and preprocess data using pre-computed gene list
+        X_train, X_test, y_train_encoded, y_test, cell_ids_test, scaler, label_encoder = load_and_preprocess_data(
+            scaling_method=scaling_method, dataset=dataset, gene_list_path=gene_list_path, selection_method=selection_method
+        )
 
         input_dim = X_train.shape[1]
         # Encode the labels
@@ -225,7 +216,7 @@ def perform_nested_cv_dn(
 
         has_used_feature_sl = "NFT" if selection_method is None else "YFT"
         # Save the trained model with hyperparameters in the filename
-        prefix_name = f"{model_type}_{has_used_feature_sl}_{reh_or_sup}_fld_{outer_fold + 1}"
+        prefix_name = f"{model_type}_{has_used_feature_sl}_{dataset}_fld_{outer_fold + 1}"
         model_filename = f"{prefix_name}.pt"
         model_filepath = os.path.join(save_model_here, model_filename)
         torch.save(best_model.state_dict(), model_filepath)  # Save the model's state_dict
@@ -326,22 +317,20 @@ def perform_nested_cv_dn(
 
 def perform_nested_cv_non_neural(
     model_type="adaboost",
-    reh_or_sup="reh",
+    dataset="hpsc",
     save_model_here=None,
     selection_method=None,   # e.g. "SelectKBest", "ElasticNetCV", or None
     scaling_method="standard",
     n_trials=20,              # How many Optuna trials
     outer_splits=5,          # Outer folds
-    custom_data_path=None
+    gene_list_path=None
 ):
     """
-    Aurélien Géron's recommended nested CV approach for 4 model types:
+    Nested CV approach for Traditional ML models:
       - 'adaboost' => Optuna optimization
       - 'random_forest' => Optuna optimization
       - 'lgbm' => Optuna optimization
       - 'ensemble' => separate searches for each (Ada, RF, LGBM), then VotingClassifier
-
-    EXACT implementation from 2_0_principle_aurelien_ml_traditional.py line 689-846
 
     * Outer loop (5 folds) => train/test splits
     * Inner loop => Optuna optimization on inner train/val split
@@ -352,8 +341,8 @@ def perform_nested_cv_non_neural(
     -----------
     model_type : str
         Model type: 'adaboost', 'random_forest', 'lgbm', or 'ensemble'
-    reh_or_sup : str
-        Dataset: 'reh' or 'sup'
+    dataset : str
+        Dataset to use ('hpsc', 'pbmc', 'mouse_brain', 'reh', 'sup'). Defaults to 'hpsc'.
     save_model_here : str
         Directory to save models and results
     selection_method : str or None
@@ -364,6 +353,8 @@ def perform_nested_cv_non_neural(
         Number of Optuna trials for hyperparameter optimization
     outer_splits : int
         Number of outer cross-validation folds
+    gene_list_path : str
+        Path to gene list file (one gene per line, UPPERCASE). REQUIRED.
     """
     import os
     import time
@@ -389,20 +380,10 @@ def perform_nested_cv_non_neural(
     for outer_fold in range(outer_splits):
         print(f"\n=== [Outer Fold {outer_fold+1}/{outer_splits}] ===")
 
-        # (A) Load data for this outer fold
-        # Use v2 (7-dataset intersection) for new_human, new_mouse, or reh
-        if reh_or_sup in ['new_human', 'new_mouse', 'reh']:
-            X_train, X_test, y_train, y_test, cell_ids_test, scaler, label_encoder = load_and_preprocess_data_v2(
-                scaling_method=scaling_method, dataset=reh_or_sup, selection_method=selection_method
-            )
-        else:
-            # Only SUP uses old format (non-intersection)
-            X_train, X_test, y_train, y_test, cell_ids_test, scaler, label_encoder = load_and_preprocess_data(
-                scaling_method=scaling_method,
-                is_reh=False,
-                selection_method=selection_method,
-                custom_data_path=custom_data_path
-            )
+        # (A) Load data for this outer fold using pre-computed gene list
+        X_train, X_test, y_train, y_test, cell_ids_test, scaler, label_encoder = load_and_preprocess_data(
+            scaling_method=scaling_method, dataset=dataset, gene_list_path=gene_list_path, selection_method=selection_method
+        )
 
         # (B) Align features
         selected_features = sorted(set(X_train.columns))
@@ -461,7 +442,7 @@ def perform_nested_cv_non_neural(
         has_used_feature_sl = "NFT" if selection_method is None else "YFT"
 
         # Save the trained model with hyperparameters in the filename
-        prefix_name = f"{model_type}_{has_used_feature_sl}_{reh_or_sup}_fld_{outer_fold + 1}"
+        prefix_name = f"{model_type}_{has_used_feature_sl}_{dataset}_fld_{outer_fold + 1}"
         model_filename = f"{prefix_name}.joblib"
         model_filepath = os.path.join(save_model_here, model_filename)
         joblib.dump(best_model, model_filepath)

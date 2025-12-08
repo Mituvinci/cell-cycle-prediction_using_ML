@@ -29,9 +29,13 @@ from imblearn.under_sampling import RandomUnderSampler, ClusterCentroids
 # Set to False to use original benchmark data
 USE_INTEGRATED_BENCHMARKS = True
 
-# Integrated benchmark paths (from scTQuery REH alignment)
-INTEGRATED_BENCHMARK_DIR = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/Training_data/scTQuery/REH_aligned_formatted"
+reh_path = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/Training_data/scTQuery/REH_aligned_formatted"
+pbmc_path = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/Training_data/scTQuery/PBMC_aligned_formatted"
 
+mouse_brain_path = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/Training_data/scTQuery/MouseBrain_formatted"
+
+# Integrated benchmark paths (from scTQuery REH alignment)
+INTEGRATED_BENCHMARK_DIR = reh_path
 # Original benchmark paths
 ORIGINAL_BENCHMARK_DIR = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/Training_data/Benchmark_data"
 ORIGINAL_BUETTNER_DIR = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data"
@@ -461,26 +465,35 @@ def load_and_preprocess_data(scaling_method, is_reh=True, check_feature=False, s
     return X_train_resampled, X_test, y_train_resampled, y_test, cell_ids_test, scaler, label_encoder
 
 
-def load_and_preprocess_data_v2(scaling_method, dataset='new_human', check_feature=False, selection_method=None):
+def load_gene_list(gene_list_path):
     """
-    Loads and preprocesses data with 7-dataset feature intersection.
+    Loads gene names from a text file.
 
-    CRITICAL: Computes intersection of ALL 7 datasets BEFORE preprocessing:
-    - REH, SUP-B15 (old human training)
-    - GSE146773, GSE64016 (human benchmarks) - uses INTEGRATED benchmarks if USE_INTEGRATED_BENCHMARKS=True
-    - Buettner_mESC (mouse benchmark) - uses INTEGRATED benchmark if USE_INTEGRATED_BENCHMARKS=True
-    - new_human_PBMC (new human training)
-    - new_mouse_brain (new mouse training)
+    Args:
+        gene_list_path (str): Path to text file with one gene per line (UPPERCASE)
 
-    IMPORTANT:
-    - All gene names are converted to UPPERCASE
-    - All gene columns are sorted ALPHABETICALLY
-    - When USE_INTEGRATED_BENCHMARKS=True, uses scTQuery-aligned benchmark data
+    Returns:
+        list: Sorted list of gene names (UPPERCASE)
+    """
+    with open(gene_list_path, 'r') as f:
+        genes = [line.strip() for line in f if line.strip()]
+    return sorted(genes)
+
+
+def load_and_preprocess_data(scaling_method, dataset='hpsc', gene_list_path=None, selection_method=None):
+    """
+    Loads and preprocesses data using a pre-computed gene list.
+
+    This function:
+    1. Loads training data based on dataset parameter
+    2. Converts ALL gene names to UPPERCASE
+    3. Filters to genes from provided gene_list_path
+    4. Applies preprocessing (scaling, ADASYN, undersampling)
 
     Args:
         scaling_method (str): Scaling method to use.
-        dataset (str): Which training data to use ('new_human', 'new_mouse', 'reh', 'sup').
-        check_feature (bool): Whether to check feature overlap.
+        dataset (str): Which training data to use ('hpsc', 'pbmc', 'mouse_brain', 'reh', 'sup').
+        gene_list_path (str): Path to text file with gene names (one per line, UPPERCASE)
         selection_method (str): Feature selection method.
 
     Returns:
@@ -488,146 +501,73 @@ def load_and_preprocess_data_v2(scaling_method, dataset='new_human', check_featu
     """
     import os
 
+    if gene_list_path is None:
+        raise ValueError("gene_list_path is required. Provide path to gene list file.")
+
+    # Load gene list
+    print("=" * 60)
+    print("LOADING GENE LIST FROM FILE")
+    print("=" * 60)
+    gene_list = load_gene_list(gene_list_path)
+    print(f"Gene list path: {gene_list_path}")
+    print(f"Number of genes: {len(gene_list)}")
+    print(f"First 5 genes: {gene_list[:5]}")
+    print(f"Last 5 genes: {gene_list[-5:]}")
+
     # Paths to training datasets
     data_dir = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data"
 
-    path_reh = f"{data_dir}/filtered_normalized_gene_expression_cc_label1_GD428_21136_Hu_REH_Parental_overlapped_all_four_regions.csv"
-    path_sup = f"{data_dir}/filtered_normalized_gene_expression_cc_label2_GD444_21136_Hu_Sup_Parental_overlapped_all_four_regions.csv"
-    path_new_human = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_human/pbmc_human_training_data.csv"
-    path_new_mouse = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_mouse/mouse_brain_training_data.csv"
+    path_reh = f"{data_dir}/training_data_1_GD428_21136_Hu_REH_Parental_normalized_gene_expression.csv"
+    path_sup = f"{data_dir}/training_data_2_GD444_21136_Hu_Sup_Parental_normalized_gene_expression.csv"
+    path_pbmc = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_human/pbmc_human_training_data.csv"
+    path_mouse_brain = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_mouse/mouse_brain_training_data.csv"
+    path_hpsc = f"{data_dir}/GSE75748_hPSC_final_training_matrix.csv"
 
-    # Paths to benchmark datasets - select based on USE_INTEGRATED_BENCHMARKS flag
-    if USE_INTEGRATED_BENCHMARKS:
-        print("=" * 60)
-        print("USING INTEGRATED BENCHMARKS (scTQuery-aligned)")
-        print("=" * 60)
-        benchmark_dir = INTEGRATED_BENCHMARK_DIR
-        path_gse146773 = os.path.join(benchmark_dir, "GSE146773_seurat_normalized_gene_expression.csv")
-        path_gse64016 = os.path.join(benchmark_dir, "GSE64016_seurat_normalized_gene_expression.csv")
-        path_buettner = os.path.join(benchmark_dir, "Buettner_mESC_benchmark_clean.csv")
-    else:
-        print("=" * 60)
-        print("USING ORIGINAL BENCHMARKS")
-        print("=" * 60)
-        path_gse146773 = f"{data_dir}/Training_data/Benchmark_data/GSE146773_seurat_normalized_gene_expression.csv"
-        path_gse64016 = f"{data_dir}/Training_data/Benchmark_data/GSE64016_seurat_normalized_gene_expression.csv"
-        path_buettner = f"{data_dir}/Buettner_mESC_benchmark_clean.csv"
+    # Dataset path mapping
+    dataset_paths = {
+        'hpsc': path_hpsc,
+        'pbmc': path_pbmc,
+        'mouse_brain': path_mouse_brain,
+        'reh': path_reh,
+        'sup': path_sup
+    }
 
-    # Load all 7 datasets
-    print("\nLoading all 7 datasets...")
-    data_reh = pd.read_csv(path_reh)
-    print(f"  REH: {len(data_reh)} cells, {len(data_reh.columns)} columns")
+    if dataset not in dataset_paths:
+        raise ValueError(f"Unknown dataset: {dataset}. Use 'hpsc', 'pbmc', 'mouse_brain', 'reh', or 'sup'")
 
-    data_sup = pd.read_csv(path_sup)
-    print(f"  SUP: {len(data_sup)} cells, {len(data_sup.columns)} columns")
+    # Load selected training dataset
+    print(f"\nLoading training data: {dataset}")
+    selected_data = pd.read_csv(dataset_paths[dataset])
+    print(f"  Loaded: {len(selected_data)} cells, {len(selected_data.columns)} columns")
 
-    data_gse146773 = pd.read_csv(path_gse146773)
-    print(f"  GSE146773: {len(data_gse146773)} cells, {len(data_gse146773.columns)} columns")
-
-    data_gse64016 = pd.read_csv(path_gse64016)
-    print(f"  GSE64016: {len(data_gse64016)} cells, {len(data_gse64016.columns)} columns")
-
-    data_buettner = pd.read_csv(path_buettner)
-    print(f"  Buettner: {len(data_buettner)} cells, {len(data_buettner.columns)} columns")
-
-    data_new_human = pd.read_csv(path_new_human)
-    print(f"  PBMC (new_human): {len(data_new_human)} cells, {len(data_new_human.columns)} columns")
-
-    data_new_mouse = pd.read_csv(path_new_mouse)
-    print(f"  MouseBrain (new_mouse): {len(data_new_mouse)} cells, {len(data_new_mouse.columns)} columns")
-
-    # Convert ALL gene names to UPPERCASE for consistent matching
+    # Convert ALL gene names to UPPERCASE
     print("\nConverting all gene names to UPPERCASE...")
-    data_reh = uppercase_gene_names(data_reh)
-    data_sup = uppercase_gene_names(data_sup)
-    data_gse146773 = uppercase_gene_names(data_gse146773)
-    data_gse64016 = uppercase_gene_names(data_gse64016)
-    data_buettner = uppercase_gene_names(data_buettner)
-    data_new_human = uppercase_gene_names(data_new_human)
-    data_new_mouse = uppercase_gene_names(data_new_mouse)
+    selected_data = uppercase_gene_names(selected_data)
 
-    # Rename columns to standardize
-    data_gse146773.rename(columns={'paper_phase': 'Predicted', 'cell': 'gex_barcode'}, inplace=True)
-    data_gse64016.rename(columns={'Labeled': 'Predicted'}, inplace=True)
-
-    # Get feature columns (exclude metadata)
+    # Get available feature columns
     metadata_exclude = ['gex_barcode', 'Predicted', 'Cell_ID', 'cell', 'phase', 'Phase',
                         'Unnamed: 0', 'dataset', 'Labeled', 'paper_phase']
 
-    def get_feature_cols(df):
-        feature_cols = [col for col in df.columns if col not in metadata_exclude]
-        # Also exclude non-numeric columns
-        numeric_df = df[feature_cols].select_dtypes(include=[np.number])
-        return set(numeric_df.columns)
+    available_features = [col for col in selected_data.columns if col not in metadata_exclude]
+    available_features_set = set(available_features)
 
-    # Compute intersection of ALL 7 datasets
-    print("\nComputing feature intersection across all 7 datasets...")
-    features_reh = get_feature_cols(data_reh)
-    features_sup = get_feature_cols(data_sup)
-    features_gse146773 = get_feature_cols(data_gse146773)
-    features_gse64016 = get_feature_cols(data_gse64016)
-    features_buettner = get_feature_cols(data_buettner)
-    features_new_human = get_feature_cols(data_new_human)
-    features_new_mouse = get_feature_cols(data_new_mouse)
+    # Check gene overlap
+    gene_list_set = set(gene_list)
+    missing_genes = gene_list_set - available_features_set
+    if missing_genes:
+        print(f"  WARNING: {len(missing_genes)} genes from gene list not found in dataset")
+        print(f"  Missing genes (first 10): {list(missing_genes)[:10]}")
+        # Filter gene list to only available genes
+        gene_list = [g for g in gene_list if g in available_features_set]
+        print(f"  Using {len(gene_list)} genes that are available")
 
-    print(f"  REH features: {len(features_reh)}")
-    print(f"  SUP features: {len(features_sup)}")
-    print(f"  GSE146773 features: {len(features_gse146773)}")
-    print(f"  GSE64016 features: {len(features_gse64016)}")
-    print(f"  Buettner features: {len(features_buettner)}")
-    print(f"  PBMC features: {len(features_new_human)}")
-    print(f"  MouseBrain features: {len(features_new_mouse)}")
-
-    common_features = (
-        features_reh &
-        features_sup &
-        features_gse146773 &
-        features_gse64016 &
-        features_buettner &
-        features_new_human &
-        features_new_mouse
-    )
-
-    # CRITICAL: Sort features alphabetically for consistency
-    common_features = sorted(list(common_features))
-    print(f"\nFound {len(common_features)} COMMON features across all 7 datasets")
-    print(f"Features are sorted ALPHABETICALLY")
-    print(f"First 5 features: {common_features[:5]}")
-    print(f"Last 5 features: {common_features[-5:]}")
-
-    if len(common_features) == 0:
-        raise ValueError("ERROR: No common features found across all 7 datasets! Check gene name formatting.")
-
-    # Add metadata columns back
+    # Filter to gene list + metadata
     metadata_cols = ['Predicted', 'gex_barcode']
+    existing_metadata = [col for col in metadata_cols if col in selected_data.columns]
+    selected_data = selected_data[gene_list + existing_metadata]
 
-    # Filter all datasets to common features (in alphabetical order)
-    def filter_to_common(df, common_feats, metadata):
-        existing_metadata = [col for col in metadata if col in df.columns]
-        return df[common_feats + existing_metadata]
-
-    data_reh = filter_to_common(data_reh, common_features, metadata_cols)
-    data_sup = filter_to_common(data_sup, common_features, metadata_cols)
-    data_gse146773 = filter_to_common(data_gse146773, common_features, metadata_cols)
-    data_gse64016 = filter_to_common(data_gse64016, common_features, metadata_cols)
-    data_buettner = filter_to_common(data_buettner, common_features, metadata_cols)
-    data_new_human = filter_to_common(data_new_human, common_features, metadata_cols)
-    data_new_mouse = filter_to_common(data_new_mouse, common_features, metadata_cols)
-
-    # Select training dataset based on parameter
-    dataset_map = {
-        'new_human': data_new_human,
-        'new_mouse': data_new_mouse,
-        'reh': data_reh,
-        'sup': data_sup
-    }
-
-    if dataset not in dataset_map:
-        raise ValueError(f"Unknown dataset: {dataset}. Use 'new_human', 'new_mouse', 'reh', or 'sup'")
-
-    selected_data = dataset_map[dataset]
-    print(f"\nUsing training data: {dataset}")
-    print(f"Training data shape: {selected_data.shape}")
+    print(f"\nFiltered training data shape: {selected_data.shape}")
+    print(f"Number of genes used for training: {len(gene_list)}")
 
     # Apply preprocessing to selected training data
     X_train_resampled, X_test, y_train_resampled, y_test, cell_ids_test, scaler, label_encoder = preprocess_rna_data(

@@ -74,16 +74,16 @@ Available models:
         '--dataset',
         type=str,
         required=False,
-        default='reh',
-        choices=['reh', 'sup', 'new_human', 'new_mouse'],
-        help='Dataset to use: reh, sup, new_human, new_mouse (default: reh). Use new_human/new_mouse for 7-dataset intersection training. Ignored if --data is provided.'
+        default='hpsc',
+        choices=['hpsc', 'pbmc', 'mouse_brain', 'reh', 'sup'],
+        help='Dataset to use: hpsc, pbmc, mouse_brain, reh, sup (default: hpsc).'
     )
 
     parser.add_argument(
-        '--data',
+        '--gene-list',
         type=str,
-        default=None,
-        help='Path to custom training data CSV. If provided, overrides --dataset. Format: cell_id, phase_label, gene1, gene2, ...'
+        required=True,
+        help='Path to gene list file (one gene per line, UPPERCASE). REQUIRED.'
     )
 
     # Output
@@ -136,6 +136,7 @@ Available models:
     print("=" * 80)
     print(f"Model: {args.model.upper()}")
     print(f"Dataset: {args.dataset.upper()}")
+    print(f"Gene List: {args.gene_list if args.gene_list else 'None (will compute 7-dataset intersection)'}")
     print(f"Output Directory: {args.output}")
     print(f"Feature Selection: {args.feature_selection if args.feature_selection else 'None'}")
     print(f"Scaling Method: {args.scaling}")
@@ -147,19 +148,19 @@ Available models:
     # Call THE MAIN TRAINING FUNCTION (your exact function!)
     perform_nested_cv_non_neural(
         model_type=args.model,
-        reh_or_sup=args.dataset,
+        dataset=args.dataset,
         save_model_here=args.output,
         selection_method=args.feature_selection,
         scaling_method=args.scaling,
         n_trials=args.trials,
         outer_splits=args.cv,
-        custom_data_path=args.data
+        gene_list_path=args.gene_list
     )
 
     print("\n" + "=" * 80)
     print("TRAINING COMPLETE!")
     print("=" * 80)
-    print(f"✅ All results saved to: {args.output}")
+    print(f"All results saved to: {args.output}")
 
 
 if __name__ == "__main__":

@@ -67,59 +67,52 @@ See `DATA_STANDARDIZATION_SUMMARY.md` for complete documentation.
 
 ---
 
-## 7-Dataset Feature Intersection
+## Pre-computed Gene Lists
 
-**NEW**: Training with `--dataset new_human` or `--dataset new_mouse` uses gene intersection across **all 7 datasets** for maximum cross-species compatibility.
+Training uses pre-computed gene lists for feature intersection across training and benchmark datasets.
 
 ### How It Works
-The `load_and_preprocess_data_v2()` function:
-1. Loads all 7 datasets (REH, SUP, GSE146773, GSE64016, Buettner_mESC, new_human_PBMC, new_mouse_brain)
-2. Capitalizes gene names in all datasets
-3. Computes intersection: **6066 common genes** across all 7 datasets
-4. Trains models using only these 6066 genes
-
-### Benefits
-- Models can be evaluated on ANY benchmark without gene mismatch errors
-- Cross-species validation works seamlessly
-- Human and mouse ortholog genes (Gapdh, Actb, Tp53) are automatically matched
+1. Gene lists are pre-computed and stored in `gene_lists/` directory
+2. Training scripts require `--gene-list` argument pointing to the gene list file
+3. All gene names are UPPERCASE for consistency
 
 ### Usage
 ```bash
-# Train on new human PBMC data with 7-dataset intersection
+# Train on hPSC data with pre-computed gene list
 python 2_model_training/train_deep_learning.py \
   --model simpledense \
-  --dataset new_human \
+  --dataset hpsc \
+  --gene-list gene_lists/hpsc_3benchmark_sup.txt \
   --trials 20 \
   --cv 5 \
-  --output models/human_pbmc/simpledense/
+  --output models/human_hpsc/simpledense/
 
-# Train on new mouse brain data with 7-dataset intersection
+# Train on REH data
 python 2_model_training/train_deep_learning.py \
   --model cnn \
-  --dataset new_mouse \
+  --dataset reh \
+  --gene-list gene_lists/reh_3benchmark_sup.txt \
   --trials 20 \
   --cv 5 \
-  --output models/mouse_brain/cnn/
-
-# Test gene intersection before training
-python test_gene_intersection.py
+  --output models/reh/cnn/
 ```
 
 **Available datasets:**
-- `reh`, `sup`: Old human training data (4-dataset intersection)
-- `new_human`: New human PBMC data (7-dataset intersection)
-- `new_mouse`: New mouse brain data (7-dataset intersection)
+- `hpsc`: Human embryonic stem cells (GSE75748)
+- `reh`: Human REH leukemia cell line
+- `sup`: Human SUP-B15 leukemia cell line
+- `pbmc`: Human PBMCs
+- `mouse_brain`: Mouse brain cells
 
 ---
 
 ## Datasets
 
 ### Training Data (Default)
+- **GSE75748 (hPSC/hESC)**: Human embryonic stem cell single-cell RNA-seq dataset containing 1,776 cells profiled across both snapshot progenitor states and a detailed temporal differentiation trajectory. This dataset captures strong cell-cycle activity and developmental transitions, making it highly suitable for training and evaluating deep-learning models for cell-cycle phase prediction.
+  - Download: [GSE75748](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE75748)
 - **REH and SUP-B15**: Human leukemia cell lines (10x Chromium Multiome)
-- **Download**: [GSE293316](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE293316)
-- **PBMCs from a Healthy Donor: Whole Transcriptome Analysis Human scRNA 10x Chrmium**: https://www.10xgenomics.com/datasets/pbm-cs-from-a-healthy-donor-whole-transcriptome-analysis-3-1-standard-4-0-0
-- **10k Brain Cells from an E18 Mouse (v3 chemistry) Mouse  scRNA 10x Chrmium**: https://www.10xgenomics.com/datasets/10-k-brain-cells-from-an-e-18-mouse-v-3-chemistry-3-standard-3-0-0
-
+  - Download: [GSE293316](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE293316)
 
 ### Benchmark Data (Ground Truth)
 - **GSE146773**: Human U-2 OS cells with FUCCI reporter
