@@ -113,6 +113,8 @@ python 2_model_training/train_deep_learning.py \
   - Download: [GSE75748](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE75748)
 - **REH and SUP-B15**: Human leukemia cell lines (10x Chromium Multiome)
   - Download: [GSE293316](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE293316)
+- **10k Brain Cells from an E18 Mouse (v3 chemistry)**: Mouse scRNA 10x Chromium
+  - Download: [10x Genomics](https://www.10xgenomics.com/datasets/10-k-brain-cells-from-an-e-18-mouse-v-3-chemistry-3-standard-3-0-0)
 
 ### Benchmark Data (Ground Truth)
 - **GSE146773**: Human U-2 OS cells with FUCCI reporter
