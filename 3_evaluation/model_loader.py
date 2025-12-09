@@ -178,13 +178,15 @@ def load_model_components(model_path):
     else:
         raise ValueError(f"Unsupported model format: {model_path}. Use .pt or .joblib")
 
-    # Locate required files
-    scaler_path = os.path.join(model_dir, f"{model_prefix}_standard_scl.pkl")
+    # Locate required files (scaler can be robust, standard, or minmax)
+    scaler_path = find_matching_file(model_dir, rf"{model_prefix}_(robust|standard|minmax)_scl\.pkl")
     label_encoder_path = os.path.join(model_dir, f"{model_prefix}_le.pkl")
     features_path = os.path.join(model_dir, f"{model_prefix}_features.txt")
     params_path = os.path.join(model_dir, f"{model_prefix}_params.txt")
 
     # Load components
+    if scaler_path is None:
+        raise FileNotFoundError(f"Scaler file not found for model prefix: {model_prefix}")
     scaler = joblib.load(scaler_path)
     label_encoder = joblib.load(label_encoder_path)
     with open(features_path, "r") as f:

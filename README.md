@@ -111,9 +111,11 @@ python 2_model_training/train_deep_learning.py \
 ### Training Data (Default)
 - **GSE75748 (hPSC/hESC)**: Human embryonic stem cell single-cell RNA-seq dataset containing 1,776 cells profiled across both snapshot progenitor states and a detailed temporal differentiation trajectory. This dataset captures strong cell-cycle activity and developmental transitions, making it highly suitable for training and evaluating deep-learning models for cell-cycle phase prediction.
   - Download: [GSE75748](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE75748)
+- **Human PBMCs (7,840 cells)**: Human peripheral blood mononuclear cells (10x Chromium). Contains 5,652 G1, 807 S, and 1,381 G2M cells after consensus labeling.
+  - Download: [10x Genomics PBMC Dataset](https://www.10xgenomics.com/datasets)
 - **REH and SUP-B15**: Human leukemia cell lines (10x Chromium Multiome)
   - Download: [GSE293316](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE293316)
-- **10k Brain Cells from an E18 Mouse (v3 chemistry)**: Mouse scRNA 10x Chromium
+- **10k Brain Cells from an E18 Mouse (v3 chemistry)**: Mouse scRNA 10x Chromium containing 10,014 cells (7,481 G1, 1,607 S, 926 G2M after consensus labeling)
   - Download: [10x Genomics](https://www.10xgenomics.com/datasets/10-k-brain-cells-from-an-e-18-mouse-v-3-chemistry-3-standard-3-0-0)
 
 ### Benchmark Data (Ground Truth)

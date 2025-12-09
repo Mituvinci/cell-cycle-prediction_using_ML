@@ -21,7 +21,7 @@ import pandas as pd
 import psutil
 import joblib
 
-from .data_utils import load_and_preprocess_data
+from .data_utils import load_and_preprocess_data, select_top_k_features
 from .optuna_utils import optimize_model_with_optuna
 from .training_utils import train_model, evaluate_model
 from .visualization import plot_training_history, plot_validation_accuracy
@@ -37,7 +37,8 @@ def perform_nested_cv_dn(
     scaling_method="standard",
     n_trials=2,
     cv=5,
-    gene_list_path=None
+    gene_list_path=None,
+    select_k=None
 ):
     """
     Performs nested cross-validation for PyTorch models.
@@ -59,6 +60,7 @@ def perform_nested_cv_dn(
         n_trials (int): Number of Optuna trials for hyperparameter optimization. Defaults to 2.
         cv (int): Number of cross-validation folds. Defaults to 5.
         gene_list_path (str): Path to gene list file (one gene per line, UPPERCASE). REQUIRED.
+        select_k (int): If provided, use SelectKBest to select top K features ONCE before CV loop.
 
     Note:
         Training uses fixed max_epochs=100 with early_stopping_patience=100 (for testing).
@@ -77,6 +79,31 @@ def perform_nested_cv_dn(
     vae_pretrain = "vaeprt"
     DANN = "DANN"
     MSDA = "MSDA"
+
+    # =========================================================================
+    # FEATURE SELECTION (ONCE BEFORE CV LOOP)
+    # =========================================================================
+    selected_gene_list_path = gene_list_path  # Default: use original gene list
+
+    if select_k is not None:
+        print(f"\n{'='*80}")
+        print(f"FEATURE SELECTION: SelectKBest (k={select_k}) - ONCE BEFORE CV")
+        print(f"{'='*80}")
+
+        # Select top K features using SelectKBest
+        selected_features = select_top_k_features(
+            dataset=dataset,
+            gene_list_path=gene_list_path,
+            k=select_k
+        )
+
+        # Save selected features to a temporary file for use in CV loop
+        selected_gene_list_path = os.path.join(save_model_here, f"selected_top{select_k}_features.txt")
+        with open(selected_gene_list_path, 'w') as f:
+            for gene in selected_features:
+                f.write(f"{gene}\n")
+        print(f"Saved {len(selected_features)} selected features to: {selected_gene_list_path}")
+        print(f"{'='*80}\n")
 
     # Outer CV Loop (5 folds)
     how_many_fold = cv
@@ -99,9 +126,9 @@ def perform_nested_cv_dn(
         print(f"Outer Fold: {outer_fold + 1}/{how_many_fold}")
         print(f"{'='*80}\n")
 
-        # Load and preprocess data using pre-computed gene list
+        # Load and preprocess data using selected gene list (either original or top-k selected)
         X_train, X_test, y_train_encoded, y_test, cell_ids_test, scaler, label_encoder = load_and_preprocess_data(
-            scaling_method=scaling_method, dataset=dataset, gene_list_path=gene_list_path, selection_method=selection_method
+            scaling_method=scaling_method, dataset=dataset, gene_list_path=selected_gene_list_path, selection_method=selection_method
         )
 
         input_dim = X_train.shape[1]
@@ -323,13 +350,15 @@ def perform_nested_cv_non_neural(
     scaling_method="standard",
     n_trials=20,              # How many Optuna trials
     outer_splits=5,          # Outer folds
-    gene_list_path=None
+    gene_list_path=None,
+    select_k=None
 ):
     """
     Nested CV approach for Traditional ML models:
       - 'adaboost' => Optuna optimization
       - 'random_forest' => Optuna optimization
       - 'lgbm' => Optuna optimization
+      - 'catboost' => Optuna optimization
       - 'ensemble' => separate searches for each (Ada, RF, LGBM), then VotingClassifier
 
     * Outer loop (5 folds) => train/test splits
@@ -340,7 +369,7 @@ def perform_nested_cv_non_neural(
     Parameters:
     -----------
     model_type : str
-        Model type: 'adaboost', 'random_forest', 'lgbm', or 'ensemble'
+        Model type: 'adaboost', 'random_forest', 'lgbm', 'catboost', or 'ensemble'
     dataset : str
         Dataset to use ('hpsc', 'pbmc', 'mouse_brain', 'reh', 'sup'). Defaults to 'hpsc'.
     save_model_here : str
@@ -355,6 +384,8 @@ def perform_nested_cv_non_neural(
         Number of outer cross-validation folds
     gene_list_path : str
         Path to gene list file (one gene per line, UPPERCASE). REQUIRED.
+    select_k : int
+        If provided, use SelectKBest to select top K features ONCE before CV loop.
     """
     import os
     import time
@@ -364,7 +395,7 @@ def perform_nested_cv_non_neural(
     import pandas as pd
     import numpy as np
     from sklearn.model_selection import train_test_split
-    from .data_utils import load_and_preprocess_data
+    from .data_utils import load_and_preprocess_data, select_top_k_features
     from .io_utils import save_scaler, save_fold_to_csv_tml
     from .training_utils import evaluate_model_non_neural
     from .visualization import plot_validation_accuracy
@@ -377,12 +408,37 @@ def perform_nested_cv_non_neural(
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     test_scores = []
 
+    # =========================================================================
+    # FEATURE SELECTION (ONCE BEFORE CV LOOP)
+    # =========================================================================
+    selected_gene_list_path = gene_list_path  # Default: use original gene list
+
+    if select_k is not None:
+        print(f"\n{'='*80}")
+        print(f"FEATURE SELECTION: SelectKBest (k={select_k}) - ONCE BEFORE CV")
+        print(f"{'='*80}")
+
+        # Select top K features using SelectKBest
+        selected_features = select_top_k_features(
+            dataset=dataset,
+            gene_list_path=gene_list_path,
+            k=select_k
+        )
+
+        # Save selected features to a file for use in CV loop
+        selected_gene_list_path = os.path.join(save_model_here, f"selected_top{select_k}_features.txt")
+        with open(selected_gene_list_path, 'w') as f:
+            for gene in selected_features:
+                f.write(f"{gene}\n")
+        print(f"Saved {len(selected_features)} selected features to: {selected_gene_list_path}")
+        print(f"{'='*80}\n")
+
     for outer_fold in range(outer_splits):
         print(f"\n=== [Outer Fold {outer_fold+1}/{outer_splits}] ===")
 
-        # (A) Load data for this outer fold using pre-computed gene list
+        # (A) Load data for this outer fold using selected gene list (either original or top-k selected)
         X_train, X_test, y_train, y_test, cell_ids_test, scaler, label_encoder = load_and_preprocess_data(
-            scaling_method=scaling_method, dataset=dataset, gene_list_path=gene_list_path, selection_method=selection_method
+            scaling_method=scaling_method, dataset=dataset, gene_list_path=selected_gene_list_path, selection_method=selection_method
         )
 
         # (B) Align features
@@ -404,7 +460,7 @@ def perform_nested_cv_non_neural(
         start_time = time.time()  # Start timing
 
         # (E) Optimize the selected model
-        if model_type in ["adaboost", "random_forest", "lgbm"]:
+        if model_type in ["adaboost", "random_forest", "lgbm", "catboost"]:
             best_model, best_params = optimize_traditional_model(
                 X_train, y_train, X_train_inner, y_train_inner, X_val, y_val, model_type, n_trials
             )

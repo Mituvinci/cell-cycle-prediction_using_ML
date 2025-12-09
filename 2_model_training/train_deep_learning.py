@@ -134,6 +134,14 @@ Available models:
         help='Number of cross-validation folds (default: 5)'
     )
 
+    # Feature selection with SelectKBest (ONCE before CV loop)
+    parser.add_argument(
+        '--select-k',
+        type=int,
+        default=None,
+        help='Select top K features using SelectKBest ONCE before CV loop (default: None = use all genes from gene list)'
+    )
+
     args = parser.parse_args()
 
     # Print configuration
@@ -145,6 +153,7 @@ Available models:
     print(f"Gene List: {args.gene_list}")
     print(f"Output Directory: {args.output}")
     print(f"Feature Selection: {args.feature_selection if args.feature_selection else 'None'}")
+    print(f"SelectKBest (k): {args.select_k if args.select_k else 'None (use all genes)'}")
     print(f"Scaling Method: {args.scaling}")
     print(f"Optuna Trials: {args.trials}")
     print(f"Max Epochs: 100 (testing mode - change to 1500 for full training)")
@@ -162,7 +171,8 @@ Available models:
         scaling_method=args.scaling,
         n_trials=args.trials,
         cv=args.cv,
-        gene_list_path=args.gene_list
+        gene_list_path=args.gene_list,
+        select_k=args.select_k
     )
 
     print("\n" + "=" * 80)

@@ -56,6 +56,7 @@ Available models:
   - adaboost
   - random_forest
   - lgbm
+  - catboost
   - ensemble (VotingClassifier with AdaBoost, RF, LGBM)
         """
     )
@@ -65,7 +66,7 @@ Available models:
         '--model',
         type=str,
         required=True,
-        choices=['adaboost', 'random_forest', 'lgbm', 'ensemble'],
+        choices=['adaboost', 'random_forest', 'lgbm', 'catboost', 'ensemble'],
         help='Model type to train'
     )
 
@@ -128,6 +129,14 @@ Available models:
         help='Number of cross-validation folds (default: 5)'
     )
 
+    # Feature selection with SelectKBest (ONCE before CV loop)
+    parser.add_argument(
+        '--select-k',
+        type=int,
+        default=None,
+        help='Select top K features using SelectKBest ONCE before CV loop (default: None = use all genes from gene list)'
+    )
+
     args = parser.parse_args()
 
     # Print configuration
@@ -139,6 +148,7 @@ Available models:
     print(f"Gene List: {args.gene_list if args.gene_list else 'None (will compute 7-dataset intersection)'}")
     print(f"Output Directory: {args.output}")
     print(f"Feature Selection: {args.feature_selection if args.feature_selection else 'None'}")
+    print(f"SelectKBest (k): {args.select_k if args.select_k else 'None (use all genes)'}")
     print(f"Scaling Method: {args.scaling}")
     print(f"Optuna Trials: {args.trials}")
     print(f"Cross-Validation Folds: {args.cv}")
@@ -154,7 +164,8 @@ Available models:
         scaling_method=args.scaling,
         n_trials=args.trials,
         outer_splits=args.cv,
-        gene_list_path=args.gene_list
+        gene_list_path=args.gene_list,
+        select_k=args.select_k
     )
 
     print("\n" + "=" * 80)

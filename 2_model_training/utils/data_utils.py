@@ -27,7 +27,7 @@ from imblearn.under_sampling import RandomUnderSampler, ClusterCentroids
 #######################################################
 # Set to True to use integrated benchmark data (scTQuery REH-aligned)
 # Set to False to use original benchmark data
-USE_INTEGRATED_BENCHMARKS = True
+USE_INTEGRATED_BENCHMARKS = False
 
 reh_path = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/Training_data/scTQuery/REH_aligned_formatted"
 pbmc_path = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/Training_data/scTQuery/PBMC_aligned_formatted"
@@ -303,16 +303,31 @@ def preprocess_rna_data(data, scaling_method, selection_method=None):
     X_train_scaled, scaler = apply_scaling(X_train, method=scaling_method)
     X_test_scaled = pd.DataFrame(scaler.transform(X_test), columns=X_test.columns)
 
-    # Step 9: Apply ADASYN (Adaptive Synthetic Sampling)
-    adasyn = ADASYN(sampling_strategy='auto', random_state=42, n_neighbors=5)
-    X_train_resampled, y_train_resampled = adasyn.fit_resample(X_train_scaled, y_train_encoded)
+    # Step 9: Apply ADASYN (Adaptive Synthetic Sampling) - skip if classes are balanced
+    try:
+        adasyn = ADASYN(sampling_strategy='auto', random_state=42, n_neighbors=5)
+        X_train_resampled, y_train_resampled = adasyn.fit_resample(X_train_scaled, y_train_encoded)
+        print("ADASYN oversampling applied successfully.")
+    except ValueError as e:
+        # Classes are already balanced, skip oversampling
+        print(f"ADASYN skipped (classes already balanced): {e}")
+        X_train_resampled = X_train_scaled
+        y_train_resampled = y_train_encoded
 
-    # Step 10: Apply Cluster-Based Undersampling
-    cluster_undersample = ClusterCentroids(sampling_strategy='auto', random_state=42)
-    X_train_resampled, y_train_resampled = cluster_undersample.fit_resample(X_train_resampled, y_train_resampled)
+    # Step 10: Apply Cluster-Based Undersampling - skip if classes are balanced
+    try:
+        cluster_undersample = ClusterCentroids(sampling_strategy='auto', random_state=42)
+        X_train_resampled, y_train_resampled = cluster_undersample.fit_resample(X_train_resampled, y_train_resampled)
+        print("ClusterCentroids undersampling applied successfully.")
+    except ValueError as e:
+        # Classes are already balanced, skip undersampling
+        print(f"ClusterCentroids skipped (classes already balanced): {e}")
 
     # Step 11: Convert back to DataFrame (ADASYN/ClusterCentroids return numpy arrays)
-    X_train_resampled = pd.DataFrame(X_train_resampled, columns=feature_columns)
+    if isinstance(X_train_resampled, np.ndarray):
+        X_train_resampled = pd.DataFrame(X_train_resampled, columns=feature_columns)
+    else:
+        X_train_resampled = pd.DataFrame(X_train_resampled.values, columns=feature_columns)
 
     # Step 11: Return Processed Data
     return X_train_resampled, X_test_scaled, y_train_resampled, y_test, cell_ids_test, scaler, label_encoder
@@ -478,6 +493,97 @@ def load_gene_list(gene_list_path):
     with open(gene_list_path, 'r') as f:
         genes = [line.strip() for line in f if line.strip()]
     return sorted(genes)
+
+
+def select_top_k_features(dataset='hpsc', gene_list_path=None, k=2000):
+    """
+    Select top K features using SelectKBest ONCE before CV loop.
+
+    This function:
+    1. Loads the full dataset
+    2. Filters to genes from gene_list_path
+    3. Uses SelectKBest (f_classif) to select top K features
+    4. Returns list of selected feature names
+
+    Args:
+        dataset (str): Which training data to use ('hpsc', 'pbmc', 'mouse_brain', 'reh', 'sup')
+        gene_list_path (str): Path to text file with gene names (one per line, UPPERCASE)
+        k (int): Number of top features to select (default: 2000)
+
+    Returns:
+        list: Selected feature names (UPPERCASE)
+    """
+    if gene_list_path is None:
+        raise ValueError("gene_list_path is required.")
+
+    # Load gene list
+    gene_list = load_gene_list(gene_list_path)
+    print(f"\n{'='*60}")
+    print(f"SELECTING TOP {k} FEATURES (SelectKBest)")
+    print(f"{'='*60}")
+    print(f"Initial gene list: {len(gene_list)} genes")
+
+    # Paths to training datasets
+    data_dir = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data"
+
+    path_reh = f"{data_dir}/training_data_1_GD428_21136_Hu_REH_Parental_normalized_gene_expression.csv"
+    path_sup = f"{data_dir}/training_data_2_GD444_21136_Hu_Sup_Parental_normalized_gene_expression.csv"
+    path_pbmc = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_human/pbmc_human_training_data.csv"
+    path_mouse_brain = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_mouse/mouse_brain_training_data.csv"
+    path_hpsc = f"{data_dir}/GSE75748_hPSC_final_training_matrix.csv"
+
+    dataset_paths = {
+        'hpsc': path_hpsc,
+        'pbmc': path_pbmc,
+        'mouse_brain': path_mouse_brain,
+        'reh': path_reh,
+        'sup': path_sup
+    }
+
+    if dataset not in dataset_paths:
+        raise ValueError(f"Unknown dataset: {dataset}")
+
+    # Load data
+    print(f"Loading dataset: {dataset}")
+    data = pd.read_csv(dataset_paths[dataset])
+    print(f"  Loaded: {len(data)} cells, {len(data.columns)} columns")
+
+    # Convert gene names to UPPERCASE
+    data = uppercase_gene_names(data)
+
+    # Filter to available genes from gene list
+    metadata_exclude = ['gex_barcode', 'Predicted', 'Cell_ID', 'cell', 'phase', 'Phase',
+                        'Unnamed: 0', 'dataset', 'Labeled', 'paper_phase']
+    available_features = [col for col in data.columns if col not in metadata_exclude]
+    available_features_set = set(available_features)
+
+    gene_list = [g for g in gene_list if g in available_features_set]
+    print(f"  Available genes from gene list: {len(gene_list)}")
+
+    # Extract features and labels
+    X = data[gene_list]
+    y = data['Predicted']
+
+    # Encode labels
+    label_encoder = LabelEncoder()
+    y_encoded = label_encoder.fit_transform(y)
+
+    # Apply SelectKBest
+    k_actual = min(k, len(gene_list))
+    print(f"  Selecting top {k_actual} features using SelectKBest (f_classif)...")
+
+    selector = SelectKBest(f_classif, k=k_actual)
+    selector.fit(X, y_encoded)
+
+    # Get selected feature names
+    selected_mask = selector.get_support()
+    selected_features = [gene_list[i] for i in range(len(gene_list)) if selected_mask[i]]
+
+    print(f"  Selected {len(selected_features)} features")
+    print(f"  Top 10 features: {selected_features[:10]}")
+    print(f"{'='*60}\n")
+
+    return sorted(selected_features)
 
 
 def load_and_preprocess_data(scaling_method, dataset='hpsc', gene_list_path=None, selection_method=None):

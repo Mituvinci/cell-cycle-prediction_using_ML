@@ -6,7 +6,8 @@ Contains Optuna hyperparameter optimization for:
 - AdaBoost
 - Random Forest
 - LightGBM
-- Ensemble (combination of all three)
+- CatBoost
+- Ensemble (combination of AdaBoost, RF, LGBM)
 
 EXACT implementation from 2_0_principle_aurelien_ml_traditional.py
 
@@ -22,7 +23,7 @@ from sklearn.metrics import accuracy_score
 
 def objective(trial, X_train_inner, y_train_inner, X_val, y_val, model_type):
     """
-    Optuna objective function for optimizing AdaBoost, Random Forest, and LGBM.
+    Optuna objective function for optimizing AdaBoost, Random Forest, LGBM, and CatBoost.
 
     EXACT implementation from 2_0_principle_aurelien_ml_traditional.py line 311-353
 
@@ -39,7 +40,7 @@ def objective(trial, X_train_inner, y_train_inner, X_val, y_val, model_type):
     y_val : np.ndarray
         Validation labels from inner CV split
     model_type : str
-        Model type: 'adaboost', 'random_forest', or 'lgbm'
+        Model type: 'adaboost', 'random_forest', 'lgbm', or 'catboost'
 
     Returns:
     --------
@@ -72,6 +73,24 @@ def objective(trial, X_train_inner, y_train_inner, X_val, y_val, model_type):
             "boosting_type": trial.suggest_categorical("boosting_type", ["gbdt", "dart"]),
         }
         model = LGBMClassifier(**params, device="cpu")
+
+    elif model_type == "catboost":
+        from catboost import CatBoostClassifier
+        params = {
+            "iterations": trial.suggest_int("iterations", 200, 800),
+            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.2, log=True),
+            "depth": trial.suggest_int("depth", 4, 10),
+            "l2_leaf_reg": trial.suggest_float("l2_leaf_reg", 1e-3, 10, log=True),
+            "subsample": trial.suggest_float("subsample", 0.5, 1.0),
+            "colsample_bylevel": trial.suggest_float("colsample_bylevel", 0.5, 1.0),
+        }
+        model = CatBoostClassifier(
+            **params,
+            loss_function="MultiClass",
+            eval_metric="MultiClass",
+            bootstrap_type="Bernoulli",  # Needed if subsample < 1.0
+            verbose=False
+        )
 
     else:
         raise ValueError("Invalid model type")
@@ -107,7 +126,7 @@ def optimize_traditional_model(X_train, y_train, X_train_inner, y_train_inner, X
     y_val : np.ndarray
         Validation labels (for optimization)
     model_type : str
-        Model type: 'adaboost', 'random_forest', or 'lgbm'
+        Model type: 'adaboost', 'random_forest', 'lgbm', or 'catboost'
     n_trials : int, default=20
         Number of Optuna trials
 
@@ -130,6 +149,14 @@ def optimize_traditional_model(X_train, y_train, X_train_inner, y_train_inner, X
         best_model = RandomForestClassifier(**best_params, class_weight="balanced")
     elif model_type == "lgbm":
         best_model = LGBMClassifier(**best_params, device="cpu")
+    elif model_type == "catboost":
+        from catboost import CatBoostClassifier
+        best_model = CatBoostClassifier(
+            **best_params,
+            loss_function="MultiClass",
+            eval_metric="MultiClass",
+            verbose=False
+        )
 
     best_model.fit(X_train, y_train)
 

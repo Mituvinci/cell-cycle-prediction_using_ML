@@ -82,7 +82,7 @@ def optimize_model_with_optuna(
         nonlocal best_model, best_score
 
         # Universal hyperparams
-        learning_rate = trial.suggest_float('learningrate', 1e-5, 1e-1, log=True)
+        learning_rate = trial.suggest_float('learningrate', 1e-4, 5e-4, log=True)
         optimizer_name = trial.suggest_categorical('optimizer', ['Adam', 'RMSprop', 'SGD'])
         # Fixed epochs - early stopping will handle optimal stopping point
         epochs = 100  # For testing (change to 1500 for full training)
@@ -96,7 +96,7 @@ def optimize_model_with_optuna(
         if model_type in special_models:
             # Additional hyperparams
             n_layers = trial.suggest_int('nlayers', 5, 5)  # example
-            n_units = trial.suggest_categorical('nunits', [[128, 64, 32, 16, 8]])
+            n_units = trial.suggest_categorical('nunits', [[256, 128, 64, 32, 16]])  # Must match n_layers=5
             dropouts = trial.suggest_categorical('dropouts', [
                 [0.2, 0.3, 0.4, 0.5, 0.5],
                 [0.1, 0.2, 0.3, 0.4, 0.5]
