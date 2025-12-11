@@ -284,6 +284,11 @@ def main():
         help='Benchmark dataset to use for SHAP analysis (default: GSE146773). Ignored if --custom_benchmark is provided.'
     )
     parser.add_argument(
+        '--cross_species',
+        action='store_true',
+        help='Enable cross-species mode (use zero imputation for missing genes). Required for human models on mouse data or vice versa.'
+    )
+    parser.add_argument(
         '--custom_benchmark',
         type=str,
         default=None,
@@ -335,6 +340,9 @@ def main():
     else:
         # Load standard benchmark
         print(f"Loading benchmark data: {args.benchmark}")
+        if args.cross_species:
+            print(f"  [CROSS-SPECIES MODE] Using zero imputation for missing genes")
+
         if args.benchmark == "GSE146773":
             benchmark_features, benchmark_labels, _ = load_gse146773(scaler, False)
         elif args.benchmark == "GSE64016":
@@ -342,7 +350,8 @@ def main():
         elif args.benchmark == "SUP":
             benchmark_features, benchmark_labels, _ = load_reh_or_sup_benchmark(scaler, reh_sup="sup")
         elif args.benchmark == "Buettner_mESC":
-            benchmark_features, benchmark_labels, _ = load_buettner_mesc(scaler, False)
+            # For cross-species, use is_old_model=True to enable zero imputation
+            benchmark_features, benchmark_labels, _ = load_buettner_mesc(scaler, False, is_old_model=args.cross_species)
 
     # Select only the features used by the model
     benchmark_features = benchmark_features[selected_features]

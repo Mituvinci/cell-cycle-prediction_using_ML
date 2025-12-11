@@ -48,13 +48,13 @@ def preprocess_benchmark_data_fusion(scaler, selected_features, label_encoder, d
         tuple: (benchmark_loader, benchmark_labels_encoded)
     """
     if dataset_name == "SUP":
-        benchmark_features, benchmark_labels, _ = load_reh_or_sup_benchmark(scaler, reh_sup="sup")
+        benchmark_features, benchmark_labels, _ = load_reh_or_sup_benchmark(scaler, reh_sup="sup", is_old_model=True, scaling_method='double')
     elif dataset_name == "GSE146773":
-        benchmark_features, benchmark_labels, _ = load_gse146773(scaler, False)
+        benchmark_features, benchmark_labels, _ = load_gse146773(scaler, check_feature=False, is_old_model=True, scaling_method='double')
     elif dataset_name == "GSE64016":
-        benchmark_features, benchmark_labels, _ = load_gse64016(scaler, False)
+        benchmark_features, benchmark_labels, _ = load_gse64016(scaler, check_feature=False, is_old_model=True, scaling_method='double')
     elif dataset_name == "Buettner_mESC" or dataset_name == "BUETTNER":
-        benchmark_features, benchmark_labels, _ = load_buettner_mesc(scaler, False)
+        benchmark_features, benchmark_labels, _ = load_buettner_mesc(scaler, check_feature=False, is_old_model=True, scaling_method='double')
     else:
         raise ValueError(f"Invalid dataset name: {dataset_name}")
 

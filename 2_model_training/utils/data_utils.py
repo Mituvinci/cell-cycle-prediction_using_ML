@@ -529,7 +529,7 @@ def select_top_k_features(dataset='hpsc', gene_list_path=None, k=2000):
     path_reh = f"{data_dir}/training_data_1_GD428_21136_Hu_REH_Parental_normalized_gene_expression.csv"
     path_sup = f"{data_dir}/training_data_2_GD444_21136_Hu_Sup_Parental_normalized_gene_expression.csv"
     path_pbmc = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_human/pbmc_human_training_data.csv"
-    path_mouse_brain = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_mouse/mouse_brain_training_data.csv"
+    path_mouse_brain = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_mouse/mouse_brain_training_data_UPPERCASE.csv"
     path_hpsc = f"{data_dir}/GSE75748_hPSC_final_training_matrix.csv"
 
     dataset_paths = {
@@ -548,7 +548,7 @@ def select_top_k_features(dataset='hpsc', gene_list_path=None, k=2000):
     data = pd.read_csv(dataset_paths[dataset])
     print(f"  Loaded: {len(data)} cells, {len(data.columns)} columns")
 
-    # Convert gene names to UPPERCASE
+    # Convert gene names to UPPERCASE (redundant for mouse_brain_UPPERCASE, but safe for others)
     data = uppercase_gene_names(data)
 
     # Filter to available genes from gene list
@@ -626,7 +626,7 @@ def load_and_preprocess_data(scaling_method, dataset='hpsc', gene_list_path=None
     path_reh = f"{data_dir}/training_data_1_GD428_21136_Hu_REH_Parental_normalized_gene_expression.csv"
     path_sup = f"{data_dir}/training_data_2_GD444_21136_Hu_Sup_Parental_normalized_gene_expression.csv"
     path_pbmc = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_human/pbmc_human_training_data.csv"
-    path_mouse_brain = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_mouse/mouse_brain_training_data.csv"
+    path_mouse_brain = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_mouse/mouse_brain_training_data_UPPERCASE.csv"
     path_hpsc = f"{data_dir}/GSE75748_hPSC_final_training_matrix.csv"
 
     # Dataset path mapping
@@ -646,7 +646,7 @@ def load_and_preprocess_data(scaling_method, dataset='hpsc', gene_list_path=None
     selected_data = pd.read_csv(dataset_paths[dataset])
     print(f"  Loaded: {len(selected_data)} cells, {len(selected_data.columns)} columns")
 
-    # Convert ALL gene names to UPPERCASE
+    # Convert ALL gene names to UPPERCASE (redundant for mouse_brain_UPPERCASE, but safe for others)
     print("\nConverting all gene names to UPPERCASE...")
     selected_data = uppercase_gene_names(selected_data)
 
