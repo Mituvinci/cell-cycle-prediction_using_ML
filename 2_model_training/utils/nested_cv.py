@@ -181,6 +181,13 @@ def perform_nested_cv_dn(
 
         # Initialize the model
         if model_type not in [vae_pretrain, DANN, MSDA]:
+            # ========== START tracking BEFORE Optuna optimization ==========
+            start_time = time.time()
+            # Start tracking GPU memory
+            torch.cuda.reset_peak_memory_stats(device) if torch.cuda.is_available() else None
+            start_mem_gpu = torch.cuda.memory_allocated(device) / 1e9 if torch.cuda.is_available() else 0
+            start_mem_cpu = psutil.virtual_memory().used / 1e9  # in GB
+
             print(f"\nOptimizing hyperparameters with Optuna ({n_trials} trials)...")
             best_model, optimizer, best_params = optimize_model_with_optuna(
                 model_type=model_type,
@@ -197,13 +204,6 @@ def perform_nested_cv_dn(
             step_size = 30
             gamma = 0.1
 
-            # ========== Track training time in the outer fold ==========
-            start_time = time.time()
-            # Start tracking GPU memory
-            start_mem_gpu = torch.cuda.memory_allocated(device) / 1e9 if torch.cuda.is_available() else 0
-            peak_mem_gpu = torch.cuda.max_memory_allocated(device) / 1e9 if torch.cuda.is_available() else 0
-            start_mem_cpu = psutil.virtual_memory().used / 1e9  # in GB
-
             print(f"\nTraining final model with best hyperparameters (max {best_params['epochs']} epochs, early stopping patience=100)...")
             train_loss, train_score, best_model = train_model(
                 best_model, train_loader, optimizer, criterion, epochs=best_params['epochs'], log_dir=save_model_here,
@@ -213,8 +213,10 @@ def perform_nested_cv_dn(
             train_losses.append(train_loss)
             # train_loss, train_score come from train_model
             train_plot_path = plot_training_history(train_loss, train_score, save_model_here)
+
+            # ========== END tracking AFTER final training ==========
             end_time = time.time()
-            training_time = end_time - start_time
+            training_time = end_time - start_time  # Now includes Optuna + final training
             # End tracking memory usage
             end_mem_gpu = torch.cuda.memory_allocated(device) / 1e9 if torch.cuda.is_available() else 0
             peak_mem_gpu = torch.cuda.max_memory_allocated(device) / 1e9 if torch.cuda.is_available() else 0
@@ -454,9 +456,10 @@ def perform_nested_cv_non_neural(
             X_train, y_train, test_size=0.2, random_state=42, stratify=y_train
         )
 
+        # ========== START tracking BEFORE Optuna optimization ==========
+        torch.cuda.reset_peak_memory_stats(device) if torch.cuda.is_available() else None
         start_mem_cpu = psutil.virtual_memory().used / 1e9  # Initial memory in GB
         start_mem_gpu = torch.cuda.memory_allocated(device) / 1e9 if torch.cuda.is_available() else 0
-        peak_mem_gpu = torch.cuda.max_memory_allocated(device) / 1e9 if torch.cuda.is_available() else 0
         start_time = time.time()  # Start timing
 
         # (E) Optimize the selected model
@@ -474,12 +477,13 @@ def perform_nested_cv_non_neural(
         # Evaluate on outer test
         print("[Outer Fold] Evaluate on test set =>")
 
-        end_time = time.time()  # End timing
+        # ========== END tracking AFTER optimization ==========
+        end_time = time.time()
+        training_time = end_time - start_time  # Includes full Optuna optimization
         end_mem_cpu = psutil.virtual_memory().used / 1e9  # Final memory in GB
         memory_used = end_mem_cpu - start_mem_cpu
-        training_time = end_time - start_time
-
         end_mem_gpu = torch.cuda.memory_allocated(device) / 1e9 if torch.cuda.is_available() else 0
+        peak_mem_gpu = torch.cuda.max_memory_allocated(device) / 1e9 if torch.cuda.is_available() else 0
         gpu_memory_used = end_mem_gpu - start_mem_gpu
 
         # Note: evaluate_model_non_neural returns 10 items, but we only unpack 9 (ignoring report_df)
