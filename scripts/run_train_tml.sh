@@ -12,7 +12,7 @@ if [ $# -lt 3 ]; then
     echo "Error: Missing required arguments!"
     echo "Usage: $0 <model> <dataset> <output_dir> [optional_args]"
     echo ""
-    echo "Available models: adaboost, random_forest, lgbm, ensemble"
+    echo "Available models: adaboost, random_forest, lgbm, catboost, ensemble"
     echo "Available datasets: reh, sup"
     exit 1
 fi
@@ -24,7 +24,7 @@ shift 3
 
 # Build training arguments
 TRAINING_SCRIPT="2_model_training/train_traditional_ml.py"
-TRAINING_ARGS="--model $MODEL --dataset $DATASET --output $OUTPUT_DIR $@"
+TRAINING_ARGS="--model $MODEL --feature-selection ElasticCV  --dataset $DATASET --output $OUTPUT_DIR $@"
 
 echo "=========================================="
 echo "Submitting Traditional ML Training Job"
