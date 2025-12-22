@@ -806,8 +806,8 @@ If you use this code, please cite:
 ```bibtex
 @inproceedings{anonymous2025cellcycle,
   title={Deep Learning Models for Cell Cycle Phase Prediction from Single-Cell RNA Sequencing Data},
-  author={Anonymous},
-  booktitle={Under Review},
+  author={Halima Akhter, Donlad Adjeroh, Gangqing Hu},
+  booktitle={AAAI Workshop 2026},
   year={2025}
 }
 ```
