@@ -1,0 +1,43 @@
+# Manual Phase Assignment for PBMC Healthy Human Dataset
+# Based on heatmap color similarity analysis
+# Date: 2025-11-30
+
+pbmc_human:
+  _description: "Manual phase assignment for human PBMC dataset based on heatmap analysis"
+  reference_tool: seurat
+
+  # ccAFv2 mappings
+  # (G1 + Late G1 + Unknown + G0/Q) → G1
+  # (S + S/G2) → S
+  # (G2/M) → G2M
+  ccafv2:
+    _heatmap: heatmap_seurat_vs_ccafv2_pbmc_human.png
+    Late G1: G1
+    Unknown: G1
+    G0/Q: G1
+    S/G2: S
+    G2/M: G2M
+    _note: "G1, S, G2M already standard (no mapping needed)"
+
+  # Revelio mappings
+  # (G1.S + M.G1) → G1
+  # (S) → S
+  # (G2 + G2M) → G2M
+  revelio:
+    _heatmap: heatmap_seurat_vs_revelio_pbmc_human.png
+    G1.S: G1
+    M.G1: G1
+    G2: G2M
+    _note: "S and G2M already standard (no mapping needed)"
+
+  # Tricycle mappings
+  # (G1.S + M.G1 + NA) → G1
+  # (S + G2) → S
+  # (G2M) → G2M
+  tricycle:
+    _heatmap: heatmap_seurat_vs_tricycle_pbmc_human.png
+    G1.S: G1
+    M.G1: G1
+    NA: G1
+    G2: S
+    _note: "S and G2M already standard (no mapping needed)"

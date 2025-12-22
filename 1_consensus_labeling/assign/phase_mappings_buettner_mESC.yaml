@@ -1,0 +1,28 @@
+# Manual Phase Assignment for Buettner mESC Dataset
+# Based on heatmap color similarity analysis
+# Date: 2025-12-05
+
+buettner_mESC:
+  _description: "Manual phase assignment for Buettner mESC benchmark dataset based on heatmap analysis"
+  reference_tool: seurat
+
+  # ccAFv2 mappings
+  # Based on preliminary analysis - ADJUST AFTER VIEWING HEATMAPS
+  ccafv2:
+    _heatmap: heatmap_seurat_vs_ccafv2_buettner_mESC.png
+    Unk: G1      # default / uncertain → G1
+    qG0: G1      # quiescent G0 usually grouped with G1
+    _note: "G1, S, G2M already standard (no mapping needed)"
+
+  # Tricycle mappings
+  # Based on preliminary analysis - ADJUST AFTER VIEWING HEATMAPS
+  tricycle:
+    _heatmap: heatmap_seurat_vs_tricycle_buettner_mESC.png
+    G1.S: S      # G1/S transition → S phase
+    G2: G2M      # G2 phase → G2M
+    G2.M: G2M    # G2/M transition → G2M
+    M.G1: G1     # M/G1 transition → G1
+    NA: G1       # treat as uncertain / default to G1
+    _note: "G1, S already standard (no mapping needed)"
+
+  # Note: Revelio not used for Buettner (mouse data)
