@@ -36,9 +36,9 @@ mouse_brain_path = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDe
 
 # Integrated benchmark paths (from scTQuery REH alignment)
 INTEGRATED_BENCHMARK_DIR = reh_path
-# Original benchmark paths
-ORIGINAL_BENCHMARK_DIR = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/Training_data/Benchmark_data"
-ORIGINAL_BUETTNER_DIR = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data"
+# Original benchmark paths - UPDATED to use preprocessed benchmarks
+ORIGINAL_BENCHMARK_DIR = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/benchmarks_preprocessed"
+ORIGINAL_BUETTNER_DIR = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/benchmarks_preprocessed"
 
 
 def match_scaler_feature_format(df, scaler, exclude_cols=['gex_barcode', 'Predicted', 'Cell_ID', 'cell', 'phase', 'Phase']):
@@ -131,9 +131,11 @@ def uppercase_gene_names(df, exclude_cols=['gex_barcode', 'Predicted', 'Cell_ID'
     rename_dict = {}
     for col in df.columns:
         if col not in exclude_cols:
-            upper = col.upper()
-            if upper != col:
-                rename_dict[col] = upper
+            # Only uppercase string column names, skip numeric columns
+            if isinstance(col, str):
+                upper = col.upper()
+                if upper != col:
+                    rename_dict[col] = upper
 
     # Rename columns
     if rename_dict:
@@ -506,7 +508,7 @@ def select_top_k_features(dataset='hpsc', gene_list_path=None, k=2000):
     4. Returns list of selected feature names
 
     Args:
-        dataset (str): Which training data to use ('hpsc', 'pbmc', 'mouse_brain', 'reh', 'sup')
+        dataset (str): Which training data to use ('hpsc', 'pbmc', 'mouse_brain', 'reh', 'sup', 'nestorova', 'concate_4ds_all', 'concate_2ds_human', 'concate_mouse')
         gene_list_path (str): Path to text file with gene names (one per line, UPPERCASE)
         k (int): Number of top features to select (default: 2000)
 
@@ -531,17 +533,29 @@ def select_top_k_features(dataset='hpsc', gene_list_path=None, k=2000):
     path_pbmc = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_human/pbmc_human_training_data.csv"
     path_mouse_brain = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_mouse/mouse_brain_training_data_UPPERCASE.csv"
     path_hpsc = f"{data_dir}/GSE75748_hPSC_final_training_matrix.csv"
+    path_nestorova = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_nestorova/nestorova_training_data.csv"
+
+    # Concatenated dataset paths
+    path_concate_4ds_all = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_concate_4_ds_pbmchealthy_human_mouse_brain_GSE75748_Nestorova/concatenated_training_data_4_ds_pbmchealthy_human_mouse_brain_GSE75748_Nestorova.csv"
+    path_concate_2ds_human = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_concate_2_ds_only_pbmchealthy_human_GSE75748/concatenated_training_data_2_ds_only_pbmchealthy_human_GSE75748.csv"
+    path_concate_mouse = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_concate_mouse_brain_Nestorova/concatenated_training_data_mouse_brain_Nestorova.csv"
+    path_gse75748_nestorova = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_GSE75748_Nestorova/concatenated_training_data_GSE75748_Nestorova.csv"
 
     dataset_paths = {
         'hpsc': path_hpsc,
         'pbmc': path_pbmc,
         'mouse_brain': path_mouse_brain,
         'reh': path_reh,
-        'sup': path_sup
+        'sup': path_sup,
+        'nestorova': path_nestorova,
+        'concate_4ds_all': path_concate_4ds_all,
+        'concate_2ds_human': path_concate_2ds_human,
+        'concate_mouse': path_concate_mouse,
+        'gse75748_nestorova': path_gse75748_nestorova
     }
 
     if dataset not in dataset_paths:
-        raise ValueError(f"Unknown dataset: {dataset}")
+        raise ValueError(f"Unknown dataset: {dataset}. Use 'hpsc', 'pbmc', 'mouse_brain', 'reh', 'sup', 'nestorova', 'concate_4ds_all', 'concate_2ds_human', or 'concate_mouse'")
 
     # Load data
     print(f"Loading dataset: {dataset}")
@@ -598,7 +612,7 @@ def load_and_preprocess_data(scaling_method, dataset='hpsc', gene_list_path=None
 
     Args:
         scaling_method (str): Scaling method to use.
-        dataset (str): Which training data to use ('hpsc', 'pbmc', 'mouse_brain', 'reh', 'sup').
+        dataset (str): Which training data to use ('hpsc', 'pbmc', 'mouse_brain', 'reh', 'sup', 'nestorova', 'concate_4ds_all', 'concate_2ds_human', 'concate_mouse').
         gene_list_path (str): Path to text file with gene names (one per line, UPPERCASE)
         selection_method (str): Feature selection method.
 
@@ -628,6 +642,13 @@ def load_and_preprocess_data(scaling_method, dataset='hpsc', gene_list_path=None
     path_pbmc = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_human/pbmc_human_training_data.csv"
     path_mouse_brain = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_mouse/mouse_brain_training_data_UPPERCASE.csv"
     path_hpsc = f"{data_dir}/GSE75748_hPSC_final_training_matrix.csv"
+    path_nestorova = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_nestorova/nestorova_training_data.csv"
+
+    # Concatenated dataset paths
+    path_concate_4ds_all = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_concate_4_ds_pbmchealthy_human_mouse_brain_GSE75748_Nestorova/concatenated_training_data_4_ds_pbmchealthy_human_mouse_brain_GSE75748_Nestorova.csv"
+    path_concate_2ds_human = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_concate_2_ds_only_pbmchealthy_human_GSE75748/concatenated_training_data_2_ds_only_pbmchealthy_human_GSE75748.csv"
+    path_concate_mouse = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_concate_mouse_brain_Nestorova/concatenated_training_data_mouse_brain_Nestorova.csv"
+    path_gse75748_nestorova = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_GSE75748_Nestorova/concatenated_training_data_GSE75748_Nestorova.csv"
 
     # Dataset path mapping
     dataset_paths = {
@@ -635,11 +656,16 @@ def load_and_preprocess_data(scaling_method, dataset='hpsc', gene_list_path=None
         'pbmc': path_pbmc,
         'mouse_brain': path_mouse_brain,
         'reh': path_reh,
-        'sup': path_sup
+        'sup': path_sup,
+        'nestorova': path_nestorova,
+        'concate_4ds_all': path_concate_4ds_all,
+        'concate_2ds_human': path_concate_2ds_human,
+        'concate_mouse': path_concate_mouse,
+        'gse75748_nestorova': path_gse75748_nestorova
     }
 
     if dataset not in dataset_paths:
-        raise ValueError(f"Unknown dataset: {dataset}. Use 'hpsc', 'pbmc', 'mouse_brain', 'reh', or 'sup'")
+        raise ValueError(f"Unknown dataset: {dataset}. Use 'hpsc', 'pbmc', 'mouse_brain', 'reh', 'sup', 'nestorova', 'concate_4ds_all', 'concate_2ds_human', or 'concate_mouse'")
 
     # Load selected training dataset
     print(f"\nLoading training data: {dataset}")
@@ -824,21 +850,14 @@ def data_preprocess_GSE(data, scaler, dataset_name, check_feature=False, is_old_
     # Get expected features
     expected_features = scaler.feature_names_in_
 
-    # For old models: Handle missing genes with mean imputation
-    # For new models: Raise KeyError if genes missing
-    if is_old_model:
-        missing_genes = set(expected_features) - set(X_labeled.columns)
-        if missing_genes:
-            print(f"  {dataset_name}: {len(missing_genes)} missing genes, using zero imputation")
-            # Fill missing genes with 0 (safe for TML models like AdaBoost)
-            missing_df = pd.DataFrame(0, index=X_labeled.index, columns=list(missing_genes))
-            X_labeled = pd.concat([X_labeled, missing_df], axis=1)
+    # Impute missing genes with 0, then reorder to match scaler
+    missing_genes = set(expected_features) - set(X_labeled.columns)
+    if missing_genes:
+        print(f"  {dataset_name}: {len(missing_genes)} missing genes, using zero imputation")
+        missing_df = pd.DataFrame(0, index=X_labeled.index, columns=list(missing_genes))
+        X_labeled = pd.concat([X_labeled, missing_df], axis=1)
 
-        # Reorder to match scaler
-        X_labeled = X_labeled[expected_features]
-    else:
-        # New models: strict matching, raise error if missing
-        X_labeled = X_labeled[expected_features]
+    X_labeled = X_labeled[expected_features]
 
     # Apply scaling based on chosen method
     if scaling_method == 'simple':
@@ -965,11 +984,66 @@ def load_reh_or_sup_benchmark(scaler, reh_sup="sup", is_old_model=False, scaling
     return X_labeled, y_labeled, cell_ids_labeled
 
 
+# OLD VERSION - COMMENTED OUT (uses combined expression + labels file)
+# def load_gse146773(scaler, check_feature=False, is_old_model=False, scaling_method='simple'):
+#     """
+#     Loads and preprocesses the GSE146773 benchmark data.
+#
+#     IMPORTANT:
+#     - All gene names are converted to UPPERCASE
+#     - Gene columns are sorted ALPHABETICALLY to match scaler
+#
+#     Args:
+#         scaler: Fitted scaler object.
+#         check_feature (bool): Whether to check feature overlap.
+#         is_old_model (bool): If True, skip capitalization (for old models). Default False.
+#         scaling_method (str): 'simple' (no double normalization) or 'double' (old method). Default 'simple'.
+#
+#     Returns:
+#         tuple: (benchmark_features, benchmark_labels, benchmark_cell_ids)
+#     """
+#     import os
+#     from collections import Counter
+#
+#     # Select benchmark data directory based on configuration
+#     if USE_INTEGRATED_BENCHMARKS:
+#         data_dir = INTEGRATED_BENCHMARK_DIR
+#         print(f"  [INFO] Using INTEGRATED benchmark: GSE146773")
+#     else:
+#         data_dir = ORIGINAL_BENCHMARK_DIR
+#         print(f"  [INFO] Using ORIGINAL benchmark: GSE146773")
+#
+#     path_gse_benchmark = os.path.join(
+#         data_dir,
+#         "GSE146773_seurat_normalized_gene_expression.csv"
+#     )
+#     data_gse_benchmark = pd.read_csv(path_gse_benchmark)
+#
+#     # Rename columns to keep consistent naming
+#     data_gse_benchmark.rename(columns={'paper_phase': 'Predicted', 'cell': 'gex_barcode'}, inplace=True)
+#
+#     # Convert ALL gene names to UPPERCASE
+#     data_gse_benchmark = uppercase_gene_names(data_gse_benchmark)
+#
+#     data_gse_benchmark['Predicted'] = data_gse_benchmark['Predicted'].str.replace(
+#         r'^S.*', 'S', regex=True
+#     )
+#     data_gse_benchmark = data_gse_benchmark.dropna(subset=['Predicted'])
+#
+#     # Preprocess the benchmark data
+#     benchmark_features, benchmark_labels, benchmark_cell_ids = data_preprocess_GSE(
+#         data_gse_benchmark, scaler, "GSE146773", check_feature, is_old_model, scaling_method
+#     )
+#
+#     return benchmark_features, benchmark_labels, benchmark_cell_ids
+
+# NEW VERSION - Loads from separate expression and labels files
 def load_gse146773(scaler, check_feature=False, is_old_model=False, scaling_method='simple'):
     """
-    Loads and preprocesses the GSE146773 benchmark data.
+    Loads and preprocesses the GSE146773 benchmark data from preprocessed files.
 
     IMPORTANT:
+    - Loads from separate expression and labels files
     - All gene names are converted to UPPERCASE
     - Gene columns are sorted ALPHABETICALLY to match scaler
 
@@ -991,16 +1065,30 @@ def load_gse146773(scaler, check_feature=False, is_old_model=False, scaling_meth
         print(f"  [INFO] Using INTEGRATED benchmark: GSE146773")
     else:
         data_dir = ORIGINAL_BENCHMARK_DIR
-        print(f"  [INFO] Using ORIGINAL benchmark: GSE146773")
+        print(f"  [INFO] Using PREPROCESSED benchmark: GSE146773")
 
-    path_gse_benchmark = os.path.join(
-        data_dir,
-        "GSE146773_seurat_normalized_gene_expression.csv"
+    # Load expression data
+    path_expression = os.path.join(data_dir, "GSE146773", "GSE146773_expression.csv")
+    data_expression = pd.read_csv(path_expression)
+
+    # Load labels
+    path_labels = os.path.join(data_dir, "GSE146773", "GSE146773_labels.csv")
+    data_labels = pd.read_csv(path_labels)
+
+    # Merge expression and labels
+    data_gse_benchmark = data_expression.merge(
+        data_labels,
+        left_on='CellID',
+        right_on='barcodes',
+        how='inner'
     )
-    data_gse_benchmark = pd.read_csv(path_gse_benchmark)
 
     # Rename columns to keep consistent naming
-    data_gse_benchmark.rename(columns={'paper_phase': 'Predicted', 'cell': 'gex_barcode'}, inplace=True)
+    data_gse_benchmark.rename(columns={'paper_phase': 'Predicted', 'CellID': 'gex_barcode'}, inplace=True)
+
+    # Drop duplicate barcode column if exists
+    if 'barcodes' in data_gse_benchmark.columns:
+        data_gse_benchmark = data_gse_benchmark.drop(columns=['barcodes'])
 
     # Convert ALL gene names to UPPERCASE
     data_gse_benchmark = uppercase_gene_names(data_gse_benchmark)
@@ -1018,11 +1106,78 @@ def load_gse146773(scaler, check_feature=False, is_old_model=False, scaling_meth
     return benchmark_features, benchmark_labels, benchmark_cell_ids
 
 
+# OLD VERSION - COMMENTED OUT (uses combined expression + labels file)
+# def load_gse64016(scaler, check_feature=False, is_old_model=False, scaling_method='simple'):
+#     """
+#     Loads and preprocesses the GSE64016 benchmark data.
+#
+#     IMPORTANT:
+#     - All gene names are converted to UPPERCASE
+#     - Gene columns are sorted ALPHABETICALLY to match scaler
+#
+#     Args:
+#         scaler: Fitted scaler object.
+#         check_feature (bool): Whether to check feature overlap.
+#         is_old_model (bool): If True, skip capitalization (for old models). Default False.
+#         scaling_method (str): 'simple' (no double normalization) or 'double' (old method). Default 'simple'.
+#
+#     Returns:
+#         tuple: (benchmark_features, benchmark_labels, benchmark_cell_ids)
+#     """
+#     import os
+#     from collections import Counter
+#
+#     # Select benchmark data directory based on configuration
+#     if USE_INTEGRATED_BENCHMARKS:
+#         data_dir = INTEGRATED_BENCHMARK_DIR
+#         print(f"  [INFO] Using INTEGRATED benchmark: GSE64016")
+#     else:
+#         data_dir = ORIGINAL_BENCHMARK_DIR
+#         print(f"  [INFO] Using ORIGINAL benchmark: GSE64016")
+#
+#     path_gse_benchmark = os.path.join(
+#         data_dir,
+#         "GSE64016_seurat_normalized_gene_expression.csv"
+#     )
+#     data_gse_benchmark = pd.read_csv(path_gse_benchmark)
+#
+#     # Rename columns to keep consistent naming
+#     data_gse_benchmark.rename(columns={'Labeled': 'Predicted'}, inplace=True)
+#
+#     # Convert ALL gene names to UPPERCASE
+#     data_gse_benchmark = uppercase_gene_names(data_gse_benchmark)
+#
+#     # Remove rows where 'Predicted' starts with 'H1'
+#     data_gse_benchmark = data_gse_benchmark[
+#         ~data_gse_benchmark['Predicted'].str.startswith('H1')
+#     ]
+#
+#     # Replace 'Predicted' values based on their prefixes
+#     data_gse_benchmark['Predicted'] = data_gse_benchmark['Predicted'].str.replace(
+#         r'^G2.*', 'G2M', regex=True
+#     )
+#     data_gse_benchmark['Predicted'] = data_gse_benchmark['Predicted'].str.replace(
+#         r'^G1.*', 'G1', regex=True
+#     )
+#     data_gse_benchmark['Predicted'] = data_gse_benchmark['Predicted'].str.replace(
+#         r'^S.*', 'S', regex=True
+#     )
+#
+#     # Preprocess the benchmark data
+#     benchmark_features, benchmark_labels, benchmark_cell_ids = data_preprocess_GSE(
+#         data_gse_benchmark, scaler, "GSE64016", check_feature, is_old_model, scaling_method
+#     )
+#
+#     return benchmark_features, benchmark_labels, benchmark_cell_ids
+
+# NEW VERSION - Loads from separate expression and labels files (with fallback to combined file)
 def load_gse64016(scaler, check_feature=False, is_old_model=False, scaling_method='simple'):
     """
-    Loads and preprocesses the GSE64016 benchmark data.
+    Loads and preprocesses the GSE64016 benchmark data from preprocessed files.
 
     IMPORTANT:
+    - Tries to load from separate expression and labels files
+    - Falls back to original combined file if labels file doesn't exist
     - All gene names are converted to UPPERCASE
     - Gene columns are sorted ALPHABETICALLY to match scaler
 
@@ -1044,16 +1199,44 @@ def load_gse64016(scaler, check_feature=False, is_old_model=False, scaling_metho
         print(f"  [INFO] Using INTEGRATED benchmark: GSE64016")
     else:
         data_dir = ORIGINAL_BENCHMARK_DIR
-        print(f"  [INFO] Using ORIGINAL benchmark: GSE64016")
+        print(f"  [INFO] Using PREPROCESSED benchmark: GSE64016")
 
-    path_gse_benchmark = os.path.join(
-        data_dir,
-        "GSE64016_seurat_normalized_gene_expression.csv"
-    )
-    data_gse_benchmark = pd.read_csv(path_gse_benchmark)
+    # Check if separate files exist
+    path_labels = os.path.join(data_dir, "GSE64016", "GSE64016_labels.csv")
 
-    # Rename columns to keep consistent naming
-    data_gse_benchmark.rename(columns={'Labeled': 'Predicted'}, inplace=True)
+    if os.path.exists(path_labels):
+        # Load from separate expression and labels files
+        path_expression = os.path.join(data_dir, "GSE64016", "GSE64016_expression.csv")
+        data_expression = pd.read_csv(path_expression)
+        data_labels = pd.read_csv(path_labels)
+
+        # Merge expression and labels
+        data_gse_benchmark = data_expression.merge(
+            data_labels,
+            left_on='CellID',
+            right_on='barcodes',
+            how='inner'
+        )
+
+        # Rename columns to keep consistent naming
+        data_gse_benchmark.rename(columns={'Labeled': 'Predicted', 'CellID': 'gex_barcode'}, inplace=True)
+
+        # Drop duplicate barcode column if exists
+        if 'barcodes' in data_gse_benchmark.columns:
+            data_gse_benchmark = data_gse_benchmark.drop(columns=['barcodes'])
+    else:
+        # Fallback: Load from original combined file
+        print(f"  [WARNING] Labels file not found, falling back to original combined file")
+        # Use the original Benchmark_data directory
+        original_dir = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/Training_data/Benchmark_data"
+        path_gse_benchmark = os.path.join(
+            original_dir,
+            "GSE64016_seurat_normalized_gene_expression.csv"
+        )
+        data_gse_benchmark = pd.read_csv(path_gse_benchmark)
+
+        # Rename columns to keep consistent naming
+        data_gse_benchmark.rename(columns={'Labeled': 'Predicted'}, inplace=True)
 
     # Convert ALL gene names to UPPERCASE
     data_gse_benchmark = uppercase_gene_names(data_gse_benchmark)
@@ -1082,11 +1265,134 @@ def load_gse64016(scaler, check_feature=False, is_old_model=False, scaling_metho
     return benchmark_features, benchmark_labels, benchmark_cell_ids
 
 
+# OLD VERSION - COMMENTED OUT (uses combined expression + labels file)
+# def load_buettner_mesc(scaler, check_feature=False, is_old_model=False, scaling_method='simple'):
+#     """
+#     Loads and preprocesses the Buettner mESC benchmark data.
+#
+#     IMPORTANT:
+#     - All gene names are converted to UPPERCASE
+#     - Gene columns are sorted ALPHABETICALLY to match scaler
+#
+#     Args:
+#         scaler: Fitted scaler object.
+#         check_feature (bool): Whether to check feature overlap.
+#         is_old_model (bool): If True, capitalize + mean imputation for missing genes. Default False.
+#         scaling_method (str): 'simple' (no double normalization) or 'double' (old method). Default 'simple'.
+#
+#     Returns:
+#         tuple: (benchmark_features, benchmark_labels, benchmark_cell_ids)
+#     """
+#     import os
+#     from collections import Counter
+#
+#     # Select benchmark data directory based on configuration
+#     if USE_INTEGRATED_BENCHMARKS:
+#         data_dir = INTEGRATED_BENCHMARK_DIR
+#         print(f"  [INFO] Using INTEGRATED benchmark: Buettner_mESC")
+#     else:
+#         data_dir = ORIGINAL_BUETTNER_DIR
+#         print(f"  [INFO] Using ORIGINAL benchmark: Buettner_mESC")
+#
+#     # Use cleaned benchmark data (without embedded Phase column)
+#     path_buettner_benchmark = os.path.join(
+#         data_dir,
+#         "Buettner_mESC_benchmark_clean.csv"
+#     )
+#
+#     # Load ground truth labels (always from original location)
+#     path_buettner_ground_truth = os.path.join(
+#         ORIGINAL_BUETTNER_DIR,
+#         "Buettner_mESC_goundTruth.csv"
+#     )
+#
+#     # Load expression data and ground truth
+#     data_buettner_benchmark = pd.read_csv(path_buettner_benchmark)
+#     ground_truth = pd.read_csv(path_buettner_ground_truth)
+#
+#     # Convert ALL gene names to UPPERCASE
+#     data_buettner_benchmark = uppercase_gene_names(data_buettner_benchmark)
+#
+#     # Merge with ground truth to get labels
+#     data_buettner_benchmark = data_buettner_benchmark.merge(
+#         ground_truth[['Cell_ID', 'Phase']],
+#         on='Cell_ID',
+#         how='left'
+#     )
+#
+#     # Rename columns to keep consistent naming
+#     data_buettner_benchmark.rename(columns={'Phase': 'Predicted', 'Cell_ID': 'gex_barcode'}, inplace=True)
+#
+#     # Standardize phase labels (if needed)
+#     # Map common variations to standard G1, S, G2M format
+#     phase_mapping = {
+#         'G1': 'G1',
+#         'S': 'S',
+#         'G2': 'G2M',
+#         'G2M': 'G2M',
+#         'M': 'G2M'
+#     }
+#
+#     data_buettner_benchmark['Predicted'] = data_buettner_benchmark['Predicted'].map(
+#         lambda x: phase_mapping.get(x, x)
+#     )
+#     data_buettner_benchmark = data_buettner_benchmark.dropna(subset=['Predicted'])
+#
+#     # OLD MODELS: Capitalize + mean imputation for missing genes
+#     # NEW MODELS: Match scaler format
+#     if is_old_model:
+#         # Always capitalize for Buettner with old models
+#         data_buettner_benchmark = match_scaler_feature_format(data_buettner_benchmark, scaler)
+#
+#         # Extract features and labels
+#         X_labeled, y_labeled, cell_ids_labeled = preprocess_benchmark_data(
+#             data_buettner_benchmark, "Buettner_mESC", check_feature
+#         )
+#
+#         # Handle missing genes with zero imputation
+#         expected_features = scaler.feature_names_in_
+#         missing_genes = set(expected_features) - set(X_labeled.columns)
+#
+#         if missing_genes:
+#             print(f"  Buettner missing {len(missing_genes)} genes, using zero imputation")
+#             # Fill missing genes with 0 (safe for TML models like AdaBoost)
+#             missing_df = pd.DataFrame(0, index=X_labeled.index, columns=list(missing_genes))
+#             X_labeled = pd.concat([X_labeled, missing_df], axis=1)
+#
+#         # Reorder to match scaler
+#         X_labeled = X_labeled[expected_features]
+#
+#         # Apply scaling based on chosen method
+#         if scaling_method == 'simple':
+#             benchmark_features = scaling_benchmark_simple(X_labeled, scaler)
+#         elif scaling_method == 'double':
+#             benchmark_features = scaling_benchmark(X_labeled, scaler)
+#         else:
+#             raise ValueError(f"Invalid scaling_method: {scaling_method}. Use 'simple' or 'double'.")
+#         benchmark_labels = y_labeled
+#         benchmark_cell_ids = cell_ids_labeled
+#     else:
+#         # New models: use standard preprocessing
+#         benchmark_features, benchmark_labels, benchmark_cell_ids = data_preprocess_GSE(
+#             data_buettner_benchmark, scaler, "Buettner_mESC", check_feature, is_old_model, scaling_method
+#         )
+#
+#     # Ensure no NaN values (both old and new models)
+#     if benchmark_features.isna().any().any():
+#         nan_count = benchmark_features.isna().sum().sum()
+#         print(f"  WARNING: Buettner has {nan_count} NaN values, filling with 0")
+#         benchmark_features = benchmark_features.fillna(0)
+#
+#     return benchmark_features, benchmark_labels, benchmark_cell_ids
+
+# NEW VERSION - Loads from separate expression and labels files
 def load_buettner_mesc(scaler, check_feature=False, is_old_model=False, scaling_method='simple'):
     """
-    Loads and preprocesses the Buettner mESC benchmark data.
+    Loads and preprocesses the Buettner mESC benchmark data from preprocessed files.
 
     IMPORTANT:
+    - Loads from separate expression and labels files
+    - Expression file is in gene x cell format (transposed), needs to be transposed
     - All gene names are converted to UPPERCASE
     - Gene columns are sorted ALPHABETICALLY to match scaler
 
@@ -1108,39 +1414,43 @@ def load_buettner_mesc(scaler, check_feature=False, is_old_model=False, scaling_
         print(f"  [INFO] Using INTEGRATED benchmark: Buettner_mESC")
     else:
         data_dir = ORIGINAL_BUETTNER_DIR
-        print(f"  [INFO] Using ORIGINAL benchmark: Buettner_mESC")
+        print(f"  [INFO] Using PREPROCESSED benchmark: Buettner_mESC")
 
-    # Use cleaned benchmark data (without embedded Phase column)
-    path_buettner_benchmark = os.path.join(
-        data_dir,
-        "Buettner_mESC_benchmark_clean.csv"
+    # Load expression data (NOW IN CELLS X GENES FORMAT - SAME AS GSE64016)
+    path_expression = os.path.join(data_dir, "Buettner_mESC", "Buettner_mESC_expression.csv")
+    data_expression = pd.read_csv(path_expression)
+
+    # File already has CellID column and cells x genes format (no transpose needed!)
+    # Rename CellID to Cell_ID for consistency with old code
+    if 'CellID' in data_expression.columns:
+        data_expression.rename(columns={'CellID': 'Cell_ID'}, inplace=True)
+
+    # Load labels
+    path_labels = os.path.join(data_dir, "Buettner_mESC", "Buettner_mESC_labels.csv")
+    data_labels = pd.read_csv(path_labels)
+
+    # Normalize cell IDs to lowercase for matching (expression has uppercase, labels have lowercase)
+    data_expression['Cell_ID_lower'] = data_expression['Cell_ID'].str.lower()
+    data_labels['CellID_lower'] = data_labels['CellID'].str.lower()
+
+    # Merge expression and labels
+    data_buettner_benchmark = data_expression.merge(
+        data_labels[['CellID_lower', 'Predicted']],
+        left_on='Cell_ID_lower',
+        right_on='CellID_lower',
+        how='inner'
     )
 
-    # Load ground truth labels (always from original location)
-    path_buettner_ground_truth = os.path.join(
-        ORIGINAL_BUETTNER_DIR,
-        "Buettner_mESC_goundTruth.csv"
-    )
+    # Rename columns to keep consistent naming
+    data_buettner_benchmark.rename(columns={'Cell_ID': 'gex_barcode'}, inplace=True)
 
-    # Load expression data and ground truth
-    data_buettner_benchmark = pd.read_csv(path_buettner_benchmark)
-    ground_truth = pd.read_csv(path_buettner_ground_truth)
+    # Drop temporary lowercase columns
+    data_buettner_benchmark = data_buettner_benchmark.drop(columns=['Cell_ID_lower', 'CellID_lower'])
 
     # Convert ALL gene names to UPPERCASE
     data_buettner_benchmark = uppercase_gene_names(data_buettner_benchmark)
 
-    # Merge with ground truth to get labels
-    data_buettner_benchmark = data_buettner_benchmark.merge(
-        ground_truth[['Cell_ID', 'Phase']],
-        on='Cell_ID',
-        how='left'
-    )
-
-    # Rename columns to keep consistent naming
-    data_buettner_benchmark.rename(columns={'Phase': 'Predicted', 'Cell_ID': 'gex_barcode'}, inplace=True)
-
     # Standardize phase labels (if needed)
-    # Map common variations to standard G1, S, G2M format
     phase_mapping = {
         'G1': 'G1',
         'S': 'S',

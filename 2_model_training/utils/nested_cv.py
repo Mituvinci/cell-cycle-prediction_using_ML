@@ -205,9 +205,11 @@ def perform_nested_cv_dn(
             gamma = 0.1
 
             print(f"\nTraining final model with best hyperparameters (max {best_params['epochs']} epochs, early stopping patience=100)...")
+            print(f"  FIXED: Early stopping now monitors VALIDATION LOSS (prevents overfitting)")
             train_loss, train_score, best_model = train_model(
                 best_model, train_loader, optimizer, criterion, epochs=best_params['epochs'], log_dir=save_model_here,
-                early_stopping_patience=100, trial=None, use_lr_scheduler=use_scheduler, step_size=step_size, gamma=gamma
+                early_stopping_patience=100, trial=None, use_lr_scheduler=use_scheduler, step_size=step_size, gamma=gamma,
+                val_loader=val_loader  # FIXED: Pass validation loader for early stopping
             )
             train_scores.append(train_score)
             train_losses.append(train_loss)

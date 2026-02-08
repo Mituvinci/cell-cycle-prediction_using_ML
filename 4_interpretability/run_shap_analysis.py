@@ -33,13 +33,67 @@ from utils.data_utils import load_gse146773
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
+def load_background_from_csv(csv_path, scaler, selected_features):
+    """
+    Load a training data CSV and prepare it as SHAP background.
+
+    Reads the CSV, drops metadata columns (barcodes, labels), keeps only the
+    genes the model was trained on, and scales with the model's scaler.
+    This gives KernelExplainer the correct baseline: the distribution the
+    model actually learned from.
+
+    Args:
+        csv_path: Path to training data CSV (genes as columns)
+        scaler: The model's fitted scaler (RobustScaler / StandardScaler / etc.)
+        selected_features: List of gene names the model expects
+
+    Returns:
+        pd.DataFrame: Scaled background data, columns = selected_features
+    """
+    # Resolve relative paths: if not found as-is, try relative to the project
+    # root (parent of cell_cycle_prediction/).
+    if not os.path.isfile(csv_path):
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        candidate    = os.path.join(project_root, csv_path)
+        if os.path.isfile(candidate):
+            csv_path = candidate
+
+    print(f"  Loading background CSV: {csv_path}")
+    df = pd.read_csv(csv_path)
+
+    # Drop known metadata columns -- everything else is treated as a gene
+    non_gene_cols = ['gex_barcode', 'CellID', 'Predicted', 'Unnamed: 0', 'cell']
+    for col in non_gene_cols:
+        if col in df.columns:
+            df = df.drop(columns=[col])
+
+    print(f"  Shape after dropping metadata: {df.shape[0]} cells x {df.shape[1]} genes")
+
+    # Align to model features. Zero-impute any genes the model expects but
+    # that are missing from this CSV (e.g. cross-species gap).
+    missing = [f for f in selected_features if f not in df.columns]
+    if len(missing) > 0:
+        print(f"  {len(missing)} model features missing from background CSV -- zero-imputed")
+        for col in missing:
+            df[col] = 0.0
+
+    df = df[selected_features]
+
+    # Scale with the same scaler the model used at training time
+    scaled = scaler.transform(df.values)
+    background_df = pd.DataFrame(scaled, columns=selected_features)
+
+    print(f"  Background ready: {background_df.shape[0]} cells x {background_df.shape[1]} features (scaled)")
+    return background_df
+
+
 def is_traditional_ml(model):
     """Check if model is Traditional ML (sklearn) vs Deep Learning (PyTorch)."""
     import sklearn
     return isinstance(model, sklearn.base.BaseEstimator)
 
 
-def run_shap_deep_learning(model, benchmark_features, feature_names, output_dir, model_name):
+def run_shap_deep_learning(model, benchmark_features, feature_names, output_dir, model_name, background_data=None):
     """
     Run SHAP analysis for Deep Learning models using KernelExplainer.
 
@@ -47,10 +101,12 @@ def run_shap_deep_learning(model, benchmark_features, feature_names, output_dir,
 
     Args:
         model: PyTorch model
-        benchmark_features: Benchmark dataset (pandas DataFrame)
+        benchmark_features: Benchmark dataset (pandas DataFrame) -- foreground (samples to explain)
         feature_names: List of feature names
         output_dir: Directory to save SHAP outputs
         model_name: Model name for file naming
+        background_data: DataFrame of scaled training data for background (optional).
+                         If None, background is sampled from benchmark_features.
     """
     print(f"\n{'='*80}")
     print(f"SHAP ANALYSIS - DEEP LEARNING MODEL")
@@ -64,12 +120,18 @@ def run_shap_deep_learning(model, benchmark_features, feature_names, output_dir,
             predictions = model(data_tensor)
         return predictions.cpu().detach().numpy()
 
-    # Sample background and test data (user's original: 10 background, 10 test)
-    background_data = benchmark_features.sample(n=10, random_state=42)
-    background_data_tensor = torch.tensor(background_data.values, dtype=torch.float32).to(device)
+    # Background: training data if provided, otherwise sample from benchmark
+    if background_data is not None:
+        bg_sample = background_data.sample(n=min(10, len(background_data)), random_state=42)
+        print("  Background source: training data (--background_data)")
+    else:
+        bg_sample = benchmark_features.sample(n=10, random_state=42)
+        print("  Background source: benchmark data (no --background_data provided)")
 
-    remaining_data = benchmark_features.drop(background_data.index)
-    benchmark_data = remaining_data.sample(n=10, random_state=42)
+    background_data_tensor = torch.tensor(bg_sample.values, dtype=torch.float32).to(device)
+
+    # Foreground: always from benchmark (these are the samples we explain)
+    benchmark_data = benchmark_features.sample(n=10, random_state=42)
     benchmark_data_tensor = torch.tensor(benchmark_data.values, dtype=torch.float32).to(device)
 
     num_features = benchmark_data.shape[1]
@@ -138,7 +200,7 @@ def run_shap_deep_learning(model, benchmark_features, feature_names, output_dir,
     return shap_values, top_features_df
 
 
-def run_shap_traditional_ml(model, benchmark_features, feature_names, output_dir, model_name, model_type):
+def run_shap_traditional_ml(model, benchmark_features, feature_names, output_dir, model_name, model_type, background_data=None):
     """
     Run SHAP analysis for Traditional ML models using KernelExplainer.
 
@@ -146,11 +208,13 @@ def run_shap_traditional_ml(model, benchmark_features, feature_names, output_dir
 
     Args:
         model: sklearn model
-        benchmark_features: Benchmark dataset (pandas DataFrame)
+        benchmark_features: Benchmark dataset (pandas DataFrame) -- foreground (samples to explain)
         feature_names: List of feature names
         output_dir: Directory to save SHAP outputs
         model_name: Model name for file naming
         model_type: Model type (adaboost, lgbm, random_forest, ensemble)
+        background_data: DataFrame of scaled training data for background (optional).
+                         If None, background is sampled from benchmark_features.
     """
     print(f"\n{'='*80}")
     print(f"SHAP ANALYSIS - TRADITIONAL ML MODEL")
@@ -171,13 +235,18 @@ def run_shap_traditional_ml(model, benchmark_features, feature_names, output_dir
     else:
         X_benchmark_data = pd.DataFrame(benchmark_features)
 
-    # Sample 2 data points for SHAP analysis (user's original code)
+    # Foreground: always from benchmark (samples to explain)
     shap_data = X_benchmark_data.sample(n=2, random_state=42)
 
-    # Use shap.sample to get a faster background summary
-    background_data = shap.sample(X_benchmark_data, 10)
+    # Background: training data if provided, otherwise sample from benchmark
+    if background_data is not None:
+        bg_sample = background_data.sample(n=min(10, len(background_data)), random_state=42)
+        print("  Background source: training data (--background_data)")
+    else:
+        bg_sample = shap.sample(X_benchmark_data, 10)
+        print("  Background source: benchmark data (no --background_data provided)")
 
-    print(f"Background samples: {len(background_data)}")
+    print(f"Background samples: {len(bg_sample)}")
     print(f"Test samples: {len(shap_data)}")
     print(f"Features: {len(feature_names)}")
 
@@ -186,7 +255,7 @@ def run_shap_traditional_ml(model, benchmark_features, feature_names, output_dir
     os.makedirs(output_dir, exist_ok=True)
 
     # Convert to numpy arrays to avoid LGBM compatibility issues
-    background_np = background_data.values if isinstance(background_data, pd.DataFrame) else background_data
+    background_np = bg_sample.values if isinstance(bg_sample, pd.DataFrame) else bg_sample
     shap_data_np = shap_data.values if isinstance(shap_data, pd.DataFrame) else shap_data
 
     if model_type in ["adaboost", "lgbm", "random_forest"]:
@@ -306,6 +375,14 @@ def main():
         default=None,
         help='Output directory (default: results/shap/model_name/)'
     )
+    parser.add_argument(
+        '--background_data',
+        type=str,
+        default=None,
+        help='Path to training data CSV to use as SHAP background. '
+             'Should be the dataset the model was trained on. '
+             'If not provided, background is sampled from the benchmark itself (less accurate).'
+    )
 
     args = parser.parse_args()
 
@@ -359,6 +436,17 @@ def main():
     print(f"  Loaded {len(benchmark_features)} samples")
     print(f"  Features: {len(selected_features)}")
 
+    # Load background from training data if provided
+    background_data = None
+    if args.background_data is not None:
+        print(f"\n{'='*80}")
+        print(f"LOADING BACKGROUND DATA (training)")
+        print(f"{'='*80}")
+        background_data = load_background_from_csv(args.background_data, scaler, selected_features)
+    else:
+        print(f"\n  NOTE: --background_data not provided. Background will be sampled from benchmark.")
+        print(f"        For correct SHAP baselines, pass training data with --background_data <path>")
+
     # Set output directory
     if args.output_dir is None:
         base_output = os.path.join(
@@ -373,12 +461,14 @@ def main():
     if is_tml:
         shap_values, top_features = run_shap_traditional_ml(
             model, benchmark_features, selected_features,
-            args.output_dir, model_name, model_type
+            args.output_dir, model_name, model_type,
+            background_data=background_data
         )
     else:
         shap_values, top_features = run_shap_deep_learning(
             model, benchmark_features, selected_features,
-            args.output_dir, model_name
+            args.output_dir, model_name,
+            background_data=background_data
         )
 
     # Print top 10 features

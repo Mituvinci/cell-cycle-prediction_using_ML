@@ -1,0 +1,248 @@
+#!/usr/bin/env bash
+################################################################################
+# Evaluate Grid Search: All 6 Configurations
+#
+# STEP 1: Evaluate all trained models on benchmarks
+# STEP 2: Consolidate results into comparison CSV
+# STEP 3: Generate comparison visualization
+#
+# Usage:
+#   bash evaluate_grid_search.sh
+#
+################################################################################
+
+GRID_SEARCH_BASE="../models/grid_search"
+BENCHMARKS="GSE146773 GSE64016"  # Human benchmarks only for concate_2ds_human
+SCALING_METHOD="simple"
+DATASET="concate_2ds_human"
+MODEL="simpledense"
+
+# All configurations
+SCALERS=("standard" "minmax" "robust")
+FEATURE_MODES=("all" "300")
+
+echo "================================================================================"
+echo "EVALUATING GRID SEARCH CONFIGURATIONS"
+echo "================================================================================"
+echo ""
+echo "Benchmarks: $BENCHMARKS"
+echo "Scaling method for evaluation: $SCALING_METHOD"
+echo ""
+
+################################################################################
+# STEP 1: Evaluate each configuration on benchmarks
+################################################################################
+
+echo "================================================================================"
+echo "STEP 1: BENCHMARK EVALUATION"
+echo "================================================================================"
+echo ""
+
+total=0
+success=0
+failed=0
+failed_configs=""
+
+for scaler in "${SCALERS[@]}"; do
+    for feature_mode in "${FEATURE_MODES[@]}"; do
+        config_name="${DATASET}_${scaler}_${feature_mode}"
+        model_dir="${GRID_SEARCH_BASE}/${config_name}/${MODEL}"
+
+        if [ ! -d "$model_dir" ]; then
+            echo "WARNING: Model directory not found: $model_dir"
+            echo "  Skipping this configuration."
+            echo ""
+            continue
+        fi
+
+        echo "--- Configuration: $config_name ---"
+
+        for model_file in "$model_dir"/*_fld_*.pt "$model_dir"/*_fld_*.joblib; do
+            [ -e "$model_file" ] || continue
+            total=$((total + 1))
+            basename_file=$(basename "$model_file")
+
+            echo "  [$total] $basename_file"
+
+            python ../3_evaluation/evaluate_models.py \
+                --model_path "$model_file" \
+                --benchmarks $BENCHMARKS \
+                --scaling_method $SCALING_METHOD
+
+            if [ $? -eq 0 ]; then
+                success=$((success + 1))
+            else
+                failed=$((failed + 1))
+                failed_configs="${failed_configs}  ${config_name}: ${basename_file}\n"
+                echo "  FAILED: $basename_file"
+            fi
+        done
+        echo ""
+    done
+done
+
+echo "================================================================================"
+echo "STEP 1 SUMMARY"
+echo "================================================================================"
+echo "  Total   : $total"
+echo "  Success : $success"
+echo "  Failed  : $failed"
+
+if [ $failed -gt 0 ]; then
+    echo ""
+    echo "  Failed configurations:"
+    echo -e "$failed_configs"
+    echo "WARNING: Some evaluations failed."
+fi
+
+echo "================================================================================"
+echo ""
+
+################################################################################
+# STEP 2: Consolidate results for each configuration
+################################################################################
+
+echo "================================================================================"
+echo "STEP 2: CONSOLIDATING RESULTS"
+echo "================================================================================"
+echo ""
+
+CONSOLIDATED_DIR="../results/grid_search"
+mkdir -p "$CONSOLIDATED_DIR"
+
+for scaler in "${SCALERS[@]}"; do
+    for feature_mode in "${FEATURE_MODES[@]}"; do
+        config_name="${DATASET}_${scaler}_${feature_mode}"
+        model_dir="${GRID_SEARCH_BASE}/${config_name}"
+
+        if [ ! -d "$model_dir" ]; then
+            echo "Skipping: $config_name (directory not found)"
+            continue
+        fi
+
+        echo "Consolidating: $config_name"
+
+        output_csv="${CONSOLIDATED_DIR}/consolidated_${config_name}.csv"
+
+        python ../3_evaluation/consolidate_training_and_benchmark.py \
+            --input "$model_dir" \
+            --output "$output_csv" \
+            --species all
+
+        if [ $? -eq 0 ]; then
+            echo "  Saved: $output_csv"
+        else
+            echo "  FAILED: consolidation for $config_name"
+        fi
+        echo ""
+    done
+done
+
+echo "================================================================================"
+echo "STEP 2 DONE"
+echo "================================================================================"
+echo ""
+
+################################################################################
+# STEP 3: Create comparison table
+################################################################################
+
+echo "================================================================================"
+echo "STEP 3: GENERATING COMPARISON TABLE"
+echo "================================================================================"
+echo ""
+
+# Python script to merge all consolidated CSVs and compare
+python - <<'PYTHON_SCRIPT'
+import pandas as pd
+import os
+import glob
+
+consolidated_dir = "../results/grid_search"
+output_file = f"{consolidated_dir}/comparison_all_configs.csv"
+
+# Find all consolidated CSVs
+csv_files = glob.glob(f"{consolidated_dir}/consolidated_*.csv")
+
+if len(csv_files) == 0:
+    print("ERROR: No consolidated CSV files found!")
+    exit(1)
+
+print(f"Found {len(csv_files)} configurations:")
+for f in csv_files:
+    print(f"  - {os.path.basename(f)}")
+
+all_results = []
+
+for csv_file in csv_files:
+    # Extract config name from filename
+    config_name = os.path.basename(csv_file).replace("consolidated_", "").replace(".csv", "")
+
+    # Read CSV
+    df = pd.read_csv(csv_file)
+
+    # Add config identifier
+    df['configuration'] = config_name
+
+    # Extract scaler and feature_mode from config_name
+    # Format: concate_2ds_human_<scaler>_<feature_mode>
+    parts = config_name.split('_')
+    if len(parts) >= 5:
+        scaler = parts[-2]
+        feature_mode = parts[-1]
+        df['scaler'] = scaler
+        df['feature_selection'] = feature_mode
+
+    all_results.append(df)
+
+# Combine all results
+combined = pd.concat(all_results, ignore_index=True)
+
+# Save combined results
+combined.to_csv(output_file, index=False)
+print(f"\nSaved comparison table: {output_file}")
+
+# Print summary statistics for each benchmark
+print("\n" + "="*80)
+print("SUMMARY: BEST CONFIGURATIONS BY BENCHMARK")
+print("="*80)
+
+benchmarks = combined['benchmark_name'].unique()
+metrics = ['accuracy', 'f1_macro', 'balanced_accuracy']
+
+for benchmark in benchmarks:
+    benchmark_data = combined[combined['benchmark_name'] == benchmark]
+
+    print(f"\n{benchmark}:")
+    print("-" * 40)
+
+    for metric in metrics:
+        if metric in benchmark_data.columns:
+            # Group by configuration and get mean
+            grouped = benchmark_data.groupby('configuration')[metric].mean().sort_values(ascending=False)
+
+            print(f"\n  {metric.upper()}:")
+            for i, (config, value) in enumerate(grouped.head(3).items(), 1):
+                print(f"    {i}. {config}: {value:.4f}")
+
+print("\n" + "="*80)
+print(f"Full results saved to: {output_file}")
+print("="*80)
+
+PYTHON_SCRIPT
+
+echo ""
+echo "================================================================================"
+echo "EVALUATION COMPLETE!"
+echo "================================================================================"
+echo ""
+echo "Results:"
+echo "  - Individual consolidated CSVs: results/grid_search/consolidated_*.csv"
+echo "  - Comparison table: results/grid_search/comparison_all_configs.csv"
+echo ""
+echo "Next steps:"
+echo "  1. Review comparison table to identify best configuration"
+echo "  2. Retrain with best config using higher trials (25-50) and cv=5"
+echo "  3. Apply best config to all 3 datasets and all 5 models"
+echo ""
+echo "================================================================================"

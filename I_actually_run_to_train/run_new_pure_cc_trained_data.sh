@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+bash run_concate_2ds_human_pipeline_evaluate_and_visu.sh
+bash run_concate_4ds_pipeline_evaluate_and_visu.sh
+bash run_concate_mouse_pipeline_evaluate_and_visu.sh

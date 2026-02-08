@@ -74,11 +74,11 @@ def focal_loss(logits, targets, alpha=0.25, gamma=2.0):
     return loss.sum(dim=1).mean()  # Reduce loss across batch
 
 
-def train_model(model, train_loader, optimizer, criterion, epochs, log_dir, early_stopping_patience, trial=None, use_lr_scheduler=False, step_size=30, gamma=0.1):
+def train_model(model, train_loader, optimizer, criterion, epochs, log_dir, early_stopping_patience, trial=None, use_lr_scheduler=False, step_size=30, gamma=0.1, val_loader=None):
     """
-    Train model with early stopping, gradient clipping, and optional learning rate scheduling.
+    Train model with early stopping on VALIDATION LOSS, gradient clipping, and optional learning rate scheduling.
 
-    EXACT implementation from 1_0_principle_aurelien_ml.py line 1498-1580
+    FIXED: Now monitors validation loss for early stopping (prevents overfitting)
 
     Args:
         model: PyTorch model
@@ -92,6 +92,7 @@ def train_model(model, train_loader, optimizer, criterion, epochs, log_dir, earl
         use_lr_scheduler: Whether to use LR scheduler
         step_size: Step size for scheduler
         gamma: Gamma for scheduler
+        val_loader: Validation data loader (for early stopping)
 
     Returns:
         tuple: (train_losses, train_scores, model)
@@ -163,16 +164,53 @@ def train_model(model, train_loader, optimizer, criterion, epochs, log_dir, earl
         writer.add_scalar('Epoch Loss', avg_loss, epoch)
         writer.add_scalar('Training Accuracy', train_accuracy, epoch)
 
-        # Early stopping: Save the best model state
-        if avg_loss < best_loss:
-            best_loss = avg_loss
-            epochs_without_improvement = 0
-            best_model_state = copy.deepcopy(model.state_dict())
+        # Early stopping: Monitor VALIDATION LOSS (prevents overfitting)
+        if val_loader is not None:
+            model.eval()
+            val_loss = 0.0
+            val_correct = 0
+            val_total = 0
+            with torch.no_grad():
+                for data, target in val_loader:
+                    data, target = data.to(device), target.to(device)
+                    output = model(data.float())
+                    loss = criterion(output, target)
+                    val_loss += loss.item()
+                    _, predicted = torch.max(output, 1)
+                    val_total += target.size(0)
+                    val_correct += (predicted == target).sum().item()
+
+            avg_val_loss = val_loss / len(val_loader)
+            val_accuracy = 100. * val_correct / val_total if val_total > 0 else 0
+            writer.add_scalar('Validation Loss', avg_val_loss, epoch)
+            writer.add_scalar('Validation Accuracy', val_accuracy, epoch)
+            model.train()
+
+            # Early stopping based on validation loss
+            if avg_val_loss < best_loss:
+                best_loss = avg_val_loss
+                epochs_without_improvement = 0
+                best_model_state = copy.deepcopy(model.state_dict())
+                if (epoch + 1) % 100 == 0:
+                    print(f'  Val Loss: {avg_val_loss:.4f}, Val Acc: {val_accuracy:.2f}% (BEST - saved)')
+            else:
+                epochs_without_improvement += 1
+                if (epoch + 1) % 100 == 0:
+                    print(f'  Val Loss: {avg_val_loss:.4f}, Val Acc: {val_accuracy:.2f}% (no improvement for {epochs_without_improvement} epochs)')
+                if epochs_without_improvement >= early_stopping_patience:
+                    print(f'Early stopping at epoch {epoch+1} (validation loss not improving)')
+                    break
         else:
-            epochs_without_improvement += 1
-            if epochs_without_improvement >= early_stopping_patience:
-                print(f'Early stopping at epoch {epoch+1}')
-                break
+            # Fallback: use training loss if no validation loader provided
+            if avg_loss < best_loss:
+                best_loss = avg_loss
+                epochs_without_improvement = 0
+                best_model_state = copy.deepcopy(model.state_dict())
+            else:
+                epochs_without_improvement += 1
+                if epochs_without_improvement >= early_stopping_patience:
+                    print(f'Early stopping at epoch {epoch+1} (training loss not improving)')
+                    break
 
     writer.close()
     # Load the best model state before returning

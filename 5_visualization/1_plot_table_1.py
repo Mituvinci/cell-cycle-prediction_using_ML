@@ -43,6 +43,12 @@ df = pd.read_csv("/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDete
 # Clean dataset names for display
 df["Dataset"] = df["Dataset"].astype(str)
 
+# Reorder datasets: training first, then benchmarks
+order_keywords = ["GSE75748", "PBMC", "Mouse Brain","Nestorova", "GSE146773", "GSE64016", "Buettner"]
+df = df[~df["Dataset"].str.contains("REH|SUP", case=False)]
+df["_order"] = df["Dataset"].apply(lambda d: next((i for i, kw in enumerate(order_keywords) if kw in d), 999))
+df = df.sort_values("_order").drop(columns=["_order"]).reset_index(drop=True)
+
 # ============================================================================
 # CREATE PUBLICATION-QUALITY FIGURE
 # ============================================================================
@@ -51,7 +57,9 @@ df["Dataset"] = df["Dataset"].astype(str)
 fig, ax = plt.subplots(figsize=(10, 6))
 
 # Bar positions and width
-x = np.arange(len(df))
+gap = 0.6
+x = np.arange(len(df), dtype=float)
+x[4:] += gap  # add space around the separator line
 width = 0.25
 
 # Professional color scheme (colorblind-friendly)
@@ -74,10 +82,13 @@ bars3 = ax.bar(x + width, df["G2M"], width, label="G2M",
 for i, row in df.iterrows():
     if row["Imbalanced"] == "*":
         max_height = max(row["G1"], row["S"], row["G2M"])
-        rect = mpl.patches.Rectangle((i-0.45, 0), 0.9, max_height * 1.1,
+        rect = mpl.patches.Rectangle((x[i]-0.45, 0), 0.9, max_height * 1.1,
                                      fill=False, edgecolor='red',
                                      linewidth=2.0, linestyle='--')
         ax.add_patch(rect)
+
+# Vertical dashed line to separate training datasets from benchmarks
+ax.axvline(x=(x[3] + x[4]) / 2, color='black', linestyle='--', linewidth=1.5)
 
 # ============================================================================
 # FONT SIZES (Publication Standard)

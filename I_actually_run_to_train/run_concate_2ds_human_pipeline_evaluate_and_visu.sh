@@ -1,0 +1,176 @@
+#!/usr/bin/env bash
+################################################################################
+# Concatenated 2 Datasets (Human): Evaluation -> Consolidation -> Benchmark Results Pipeline
+#
+# STEP_1: Evaluate all trained models on 4 benchmarks
+#         -> creates *_details_benchmark.csv in each model subdirectory
+# STEP_2: Consolidate training + benchmark metrics into one CSV
+#         -> creates results/double/consolidated_concate_2ds_human.csv
+# STEP_3: Generate final benchmark results + Top-3 ensemble + plots
+#         -> outputs to 5_visualization/heatmap_barplot_lineplots_csv/nft_concate_2ds_human/
+#
+# Usage:
+#   bash run_concate_2ds_human_pipeline.sh            # run all 3 steps
+#   bash run_concate_2ds_human_pipeline.sh --step 1   # run only STEP_1
+#   bash run_concate_2ds_human_pipeline.sh --step 2   # run only STEP_2
+#   bash run_concate_2ds_human_pipeline.sh --step 3   # run only STEP_3
+################################################################################
+
+BASE_DIR="/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction"
+cd "$BASE_DIR"
+method_is="simple"
+MODEL_BASE="models/final_best/concate_2ds_human"
+CONSOLIDATED_OUTPUT="results/$method_is/consolidated_concate_2ds_human.csv"
+BENCHMARKS="GSE146773 GSE64016 Buettner_mESC"
+
+# Parse --step argument (default: run all)
+RUN_STEP="all"
+if [ "$1" == "--step" ] && [ -n "$2" ]; then
+    RUN_STEP="$2"
+fi
+
+################################################################################
+# STEP_1: Evaluate all models on all 4 benchmarks
+################################################################################
+
+if [ "$RUN_STEP" == "all" ] || [ "$RUN_STEP" == "1" ]; then
+
+echo "================================================================================"
+echo "STEP_1: BENCHMARK EVALUATION (Concatenated 2 Datasets - Human Only)"
+echo "================================================================================"
+echo "Model directory : $MODEL_BASE"
+echo "Benchmarks      : $BENCHMARKS"
+echo "Scaling method  : $method_is"
+echo "================================================================================"
+echo ""
+
+total=0
+success=0
+failed=0
+failed_files=""
+
+for model_dir in "$MODEL_BASE"/*/; do
+    [ -d "$model_dir" ] || continue
+    model_name=$(basename "$model_dir")
+    echo "--- $model_name ---"
+
+    for model_file in "$model_dir"*_fld_*.pt "$model_dir"*_fld_*.joblib; do
+        [ -e "$model_file" ] || continue
+        total=$((total + 1))
+        basename_file=$(basename "$model_file")
+
+        echo "  [$total] $basename_file"
+
+        python 3_evaluation/evaluate_models.py \
+            --model_path "$model_file" \
+            --benchmarks $BENCHMARKS \
+            --scaling_method $method_is
+
+        if [ $? -eq 0 ]; then
+            success=$((success + 1))
+        else
+            failed=$((failed + 1))
+            failed_files="$failed_files  $basename_file\n"
+            echo "  FAILED: $basename_file"
+        fi
+    done
+    echo ""
+done
+
+echo "================================================================================"
+echo "STEP_1 SUMMARY"
+echo "================================================================================"
+echo "  Total   : $total"
+echo "  Success : $success"
+echo "  Failed  : $failed"
+
+if [ $failed -gt 0 ]; then
+    echo ""
+    echo "  Failed files:"
+    echo -e "$failed_files"
+    echo "WARNING: $failed evaluations failed. Fix before running STEP_2."
+    exit 1
+fi
+
+echo "================================================================================"
+echo ""
+
+fi  # end STEP_1
+
+################################################################################
+# STEP_2: Consolidate training + benchmark results
+################################################################################
+
+if [ "$RUN_STEP" == "all" ] || [ "$RUN_STEP" == "2" ]; then
+
+echo "================================================================================"
+echo "STEP_2: CONSOLIDATION"
+echo "================================================================================"
+echo "Input  : $MODEL_BASE"
+echo "Output : $CONSOLIDATED_OUTPUT"
+echo "================================================================================"
+echo ""
+
+python 3_evaluation/consolidate_training_and_benchmark.py \
+    --input "$MODEL_BASE" \
+    --output "$CONSOLIDATED_OUTPUT" \
+    --species all
+
+if [ $? -ne 0 ]; then
+    echo "ERROR: Consolidation failed. Check output above."
+    exit 1
+fi
+
+echo ""
+echo "STEP_2 DONE: $CONSOLIDATED_OUTPUT"
+echo "================================================================================"
+echo ""
+
+fi  # end STEP_2
+
+################################################################################
+# STEP_3: Generate benchmark results + Top-3 ensemble + plots
+################################################################################
+
+if [ "$RUN_STEP" == "all" ] || [ "$RUN_STEP" == "3" ]; then
+
+echo "================================================================================"
+echo "STEP_3: BENCHMARK RESULTS + ENSEMBLE + PLOTS"
+echo "================================================================================"
+echo "Input consolidated CSV : $CONSOLIDATED_OUTPUT"
+echo "Model directory        : $MODEL_BASE"
+echo "================================================================================"
+echo ""
+
+if [ ! -f "$CONSOLIDATED_OUTPUT" ]; then
+    echo "ERROR: Consolidated CSV not found: $CONSOLIDATED_OUTPUT"
+    echo "Run STEP_2 first."
+    exit 1
+fi
+
+python 5_visualization/3_generate_all_benchmark_results_FIXED.py \
+    --input "$CONSOLIDATED_OUTPUT" \
+    --model-dir "$MODEL_BASE"
+
+if [ $? -ne 0 ]; then
+    echo "ERROR: Benchmark results generation failed. Check output above."
+    exit 1
+fi
+
+echo ""
+echo "--- Running tool comparison barplot ---"
+echo ""
+
+python 5_visualization/5_plot_tool_comparison_barplot.py --training-dataset nft_concate_2ds_human
+
+if [ $? -ne 0 ]; then
+    echo "WARNING: Tool comparison barplot failed. Check output above."
+fi
+
+echo ""
+echo "================================================================================"
+echo "STEP_3 DONE"
+echo "Results: 5_visualization/heatmap_barplot_lineplots_csv/nft_concate_2ds_human/"
+echo "================================================================================"
+
+fi  # end STEP_3

@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Create concatenated dataset: GSE75748 (human) + Nestorova (mouse)
+
+OUTPUT_DIR="../1_consensus_labeling/assign/final_training_data_GSE75748_Nestorova"
+mkdir -p "$OUTPUT_DIR"
+
+echo "Creating GSE75748 + Nestorova concatenated dataset..."
+
+python ../concatenate_training_datasets.py \
+  --datasets \
+    "../1_consensus_labeling/assign/final_training_data_hpsc/GSE75748_hPSC_expression_with_consensus_labels.csv" \
+    "../1_consensus_labeling/assign/final_training_data_nestorova/nestorova_expression_with_consensus_labels.csv" \
+  --output_dir "$OUTPUT_DIR" \
+  --output_name "GSE75748_Nestorova"
+
+echo "Done! Dataset saved to: $OUTPUT_DIR"
+ls -lh "$OUTPUT_DIR"

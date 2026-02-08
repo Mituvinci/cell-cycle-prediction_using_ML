@@ -1,28 +1,44 @@
 #!/usr/bin/env python3
 """
-Comprehensive Benchmark Results Generator
-==========================================
+FIXED Comprehensive Benchmark Results Generator
+================================================
+
+IMPORTANT CHANGES FROM ORIGINAL:
+1. Uses FIXED Top-3 models for ALL benchmarks (not different per benchmark)
+2. NEVER uses DeepDense (always excluded)
+3. For REH: Uses SimpleDense, EnhanceDense, FeatureEmbedding by default
+4. For other datasets: Can specify different fixed models
 
 This script does EVERYTHING in one go:
 1. Extracts best models from 5-fold CV for ALL benchmarks
-2. Calculates Top3DF and Top3SF ensemble fusion
+2. Calculates Top3DF and Top3SF ensemble fusion with FIXED models
 3. Generates CSV files for each benchmark
 4. Generates precision/recall heatmap for all benchmarks
 
 Usage:
-    python generate_all_benchmark_results.py --input <csv_file> [--skip-ensemble] [--skip-heatmap]
+    # REH models (uses default: SimpleDense, EnhanceDense, FE)
+    python 3_generate_all_benchmark_results_FIXED.py \
+        --input ../results/double/consolidated_reh_7ds.csv \
+        --model-dir ../models/submitted_human_models/Deeplearning_ML/REH
+
+    # Custom fixed models
+    python 3_generate_all_benchmark_results_FIXED.py \
+        --input ../results/double/consolidated_reh_7ds.csv \
+        --model-dir ../models/submitted_human_models/Deeplearning_ML/REH \
+        --fixed-models simpledense_NFT_reh_fld_2 enhancedense_NFT_reh_fld_3 fe_NFT_reh_fld_5
 
 Arguments:
     --input: Path to consolidated CSV file with all model results
+    --model-dir: Base directory for .pt model files (required for ensemble)
+    --fixed-models: Space-separated list of 3 model prefix names (optional, auto-detected if not provided)
     --skip-ensemble: Skip Top3 ensemble fusion calculation (faster)
     --skip-heatmap: Skip heatmap generation
-    --model-dir: Base directory for .pt model files (optional)
 
 Output:
-    - sup_results_reh.csv
-    - gse146773_results_reh.csv
-    - gse64016_results_reh.csv
-    - buettner_mesc_results_reh.csv
+    - sup_results_<dataset>.csv
+    - gse146773_results_<dataset>.csv
+    - gse64016_results_<dataset>.csv
+    - buettner_mesc_results_<dataset>.csv
     - precision_recall_heatmap_3benchmarks.pdf/png/jpg
 """
 
@@ -49,22 +65,24 @@ from ensemble_fusion import score_level_fusion, decision_level_fusion
 
 plt.rcParams['font.family'] = 'serif'
 plt.rcParams['font.serif'] = ['Times New Roman']
-plt.rcParams['pdf.fonttype'] = 42
-plt.rcParams['ps.fonttype'] = 42
-plt.rcParams['figure.dpi'] = 300
-plt.rcParams['savefig.dpi'] = 600
+plt.rcParams['font.size'] = 10
+plt.rcParams['axes.labelsize'] = 10
+plt.rcParams['axes.titlesize'] = 11
+plt.rcParams['xtick.labelsize'] = 9
+plt.rcParams['ytick.labelsize'] = 9
+plt.rcParams['legend.fontsize'] = 9
 
-# ============================================================================
-# MODEL NAME MAPPING AND ORDERING
-# ============================================================================
-
-MODEL_NAME_MAPPING = {
+# Model name mapping
+MODEL_NAME_MAP = {
     'simpledense': 'DNN3',
     'sd': 'DNN3',
+    'dnn3': 'DNN3',
+    'deepdense': 'DNN4',  # EXCLUDED - NEVER USE
+    'dd': 'DNN4',  # EXCLUDED - NEVER USE
+    'dnn4': 'DNN4',  # EXCLUDED - NEVER USE
     'enhancedense': 'DNN5',
     'ed': 'DNN5',
-    'deepdense': 'DNN4',
-    'dd': 'DNN4',
+    'dnn5': 'DNN5',
     'featureembedding': 'FE model',
     'fe': 'FE model',
     'cnn': 'CNN',
@@ -76,19 +94,17 @@ MODEL_NAME_MAPPING = {
     'adaboost': 'Adaboost',
     'randomforest': 'Random Forest',
     'random': 'Random Forest',
-    'rf': 'Random Forest'
 }
 
-# Consistent model order for ALL visualizations
-# DNN4 removed, Top 3 DF/SF moved after Embedding3TML (no AUC for DF)
+# Consistent model order for ALL visualizations (DNN4/DeepDense REMOVED)
 MODEL_ORDER = [
     'DNN3',
     'DNN5',
     'CNN',
     'Hybrid CNN',
     'FE model',
-    'Adaboost',
     'LGBM',
+    'Adaboost',
     'Random Forest',
     'Embedding3TML',
     'Top 3 DF',
@@ -98,25 +114,20 @@ MODEL_ORDER = [
 def sort_models_by_order(df):
     """Sort DataFrame by predefined model order."""
     df['sort_key'] = df['Model'].apply(lambda x: MODEL_ORDER.index(x) if x in MODEL_ORDER else 999)
-    df = df.sort_values('sort_key').drop('sort_key', axis=1).reset_index(drop=True)
+    df = df.sort_values('sort_key').drop('sort_key', axis=1)
     return df
 
-
 def fix_metric_scale(value):
-    """
-    Fix MCC/Kappa scale inconsistency.
-    Both should be -1 to +1, but some models incorrectly output 0-100.
-    If value > 1, divide by 100.
-    """
+    """Fix MCC/Kappa scale if needed (should be -1 to +1, not 0-100)."""
     if pd.isna(value):
         return value
-    if abs(value) > 1:
+    if value > 1.5:
         return value / 100.0
     return value
 
-MODEL_DISPLAY_NAMES_HEATMAP = {
+# Compact display names for heatmap
+HEATMAP_MODEL_NAMES = {
     'DNN3': 'DNN3',
-    'DNN4': 'DNN4',
     'DNN5': 'DNN5',
     'FE model': 'FE',
     'CNN': 'CNN',
@@ -129,15 +140,9 @@ MODEL_DISPLAY_NAMES_HEATMAP = {
     'Embedding3TML': 'Embedding3TML'
 }
 
-# ============================================================================
-# HELPER FUNCTIONS
-# ============================================================================
-
 def extract_training_dataset(prefix_name):
     """
     Extract training dataset name from prefix_name.
-
-    Pattern: *_DATASET_fld_*
 
     Examples:
         - "fe_NFT_reh_fld_1" -> "reh"
@@ -147,19 +152,12 @@ def extract_training_dataset(prefix_name):
     """
     match = re.search(r'_([a-z_]+)_fld', prefix_name.lower())
     if match:
-        return match.group(1)
+        dataset = match.group(1)
+        # Add 'nft_' prefix for consistency
+        if not dataset.startswith('nft_'):
+            return f"nft_{dataset}"
+        return dataset
     return None
-
-
-def extract_model_architecture(model_name):
-    """Extract base model architecture from full model name."""
-    return model_name.lower().split('_')[0]
-
-
-def map_to_display_name(architecture):
-    """Map architecture name to display name."""
-    return MODEL_NAME_MAPPING.get(architecture, architecture)
-
 
 def find_model_file(prefix_name, base_search_dir=None):
     """Find .pt model file by prefix_name."""
@@ -171,28 +169,57 @@ def find_model_file(prefix_name, base_search_dir=None):
 
     if len(matches) == 0:
         return None
-    elif len(matches) > 1:
-        return matches[0]
     else:
         return matches[0]
 
+def extract_model_architecture(model_name):
+    """Extract architecture name from model column."""
+    model_lower = model_name.lower()
+    if 'simpledense' in model_lower or 'dnn3' in model_lower:
+        return 'simpledense'
+    elif 'deepdense' in model_lower or 'dnn4' in model_lower:
+        return 'deepdense'
+    elif 'enhancedense' in model_lower or 'dnn5' in model_lower:
+        return 'enhancedense'
+    elif 'featureembedding' in model_lower or 'fe_' in model_lower or model_lower == 'fe':
+        return 'featureembedding'
+    elif 'hybrid' in model_lower or 'hbdcnn' in model_lower:
+        return 'hybridcnn'
+    elif 'cnn' in model_lower and 'hybrid' not in model_lower:
+        return 'cnn'
+    elif 'ensemble' in model_lower:
+        return 'ensemble'
+    elif 'lightgbm' in model_lower or 'lgbm' in model_lower:
+        return 'lightgbm'
+    elif 'adaboost' in model_lower:
+        return 'adaboost'
+    elif 'random' in model_lower or 'rf' in model_lower:
+        return 'randomforest'
+    return model_name
+
+def map_to_display_name(architecture):
+    """Map architecture to display name."""
+    arch_lower = architecture.lower()
+    return MODEL_NAME_MAP.get(arch_lower, architecture)
 
 def extract_best_models_for_benchmark(df, benchmark, base_search_dir=None):
     """
     Extract best performing model for each architecture on specified benchmark.
 
+    IMPORTANT: DeepDense (DNN4) is ALWAYS excluded.
+
     Returns:
-        tuple: (best_models_df, top3_info, best_models_full_data)
+        tuple: (best_models_df, best_models_full_data)
     """
     df['architecture'] = df['Model'].apply(extract_model_architecture)
 
     best_models = []
-    all_models_info = []
-    best_models_full = []  # Store full data for heatmap
+    best_models_full = []
 
     for architecture in df['architecture'].unique():
-        # Skip DNN4 (deepdense) - removed from all visualizations
+        # CRITICAL: Skip DeepDense (DNN4) - ALWAYS excluded
         if architecture.lower() in ['deepdense', 'dd', 'dnn4']:
+            print(f"  Skipping DeepDense (DNN4) - excluded from analysis")
             continue
 
         arch_models = df[df['architecture'] == architecture].copy()
@@ -202,7 +229,6 @@ def extract_best_models_for_benchmark(df, benchmark, base_search_dir=None):
         display_name = map_to_display_name(architecture)
 
         # Metrics for CSV output
-        # Fix MCC/Kappa scale (should be -1 to +1, not 0-100)
         mcc_value = fix_metric_scale(best_model[f'{benchmark}_mcc'])
         kappa_value = fix_metric_scale(best_model[f'{benchmark}_kappa'])
 
@@ -221,8 +247,7 @@ def extract_best_models_for_benchmark(df, benchmark, base_search_dir=None):
             'GPU_Memory_MB': round(best_model['gpu_memory_used'], 2) if pd.notna(best_model['gpu_memory_used']) else None
         }
 
-        # Add per-class precision and recall (if available)
-        # DL models have these in 0-1 scale, need to multiply by 100
+        # Add per-class precision and recall
         dl_models = ['DNN3', 'DNN5', 'FE model', 'CNN', 'Hybrid CNN']
         is_dl_model = display_name in dl_models
 
@@ -232,29 +257,25 @@ def extract_best_models_for_benchmark(df, benchmark, base_search_dir=None):
 
             if prec_col in best_model.index:
                 prec_val = best_model[prec_col]
-                # DL models: always multiply by 100 (they're in 0-1 scale)
                 if pd.notna(prec_val) and is_dl_model:
                     prec_val = prec_val * 100
                 model_data[f'precision_{phase}'] = round(prec_val, 2) if pd.notna(prec_val) else None
 
             if rec_col in best_model.index:
                 rec_val = best_model[rec_col]
-                # DL models: always multiply by 100 (they're in 0-1 scale)
                 if pd.notna(rec_val) and is_dl_model:
                     rec_val = rec_val * 100
                 model_data[f'recall_{phase}'] = round(rec_val, 2) if pd.notna(rec_val) else None
 
         best_models.append(model_data)
 
-        # Store full data for heatmap (includes per-class metrics)
+        # Store full data for heatmap
         full_data = {'Model': display_name}
         for col in best_model.index:
             if col.startswith(f'{benchmark}_'):
-                # Remove benchmark prefix for easier access
                 clean_col = col.replace(f'{benchmark}_', '')
                 value = best_model[col]
 
-                # DL models: multiply per-class precision/recall by 100
                 if is_dl_model and any(clean_col.startswith(prefix) for prefix in ['precision_', 'recall_']):
                     if pd.notna(value):
                         value = value * 100
@@ -262,31 +283,134 @@ def extract_best_models_for_benchmark(df, benchmark, base_search_dir=None):
                 full_data[clean_col] = value
         best_models_full.append(full_data)
 
-        # Store for top 3 selection
-        all_models_info.append({
-            'display_name': display_name,
-            'prefix_name': best_model['prefix_name'],
-            'accuracy': best_model[f'{benchmark}_accuracy']
-        })
-
     output_df = pd.DataFrame(best_models).sort_values('Accuracy', ascending=False).reset_index(drop=True)
 
-    # Find top 3 DL models
-    dl_models = [m for m in all_models_info if m['display_name'] not in ['LGBM', 'Adaboost', 'Random Forest', 'Embedding3TML']]
-    top3_models = sorted(dl_models, key=lambda x: x['accuracy'], reverse=True)[:3]
+    return output_df, pd.DataFrame(best_models_full)
+
+
+def find_fixed_top3_models(df_all, fixed_model_names, base_search_dir):
+    """
+    Find FIXED Top-3 model paths that will be used for ALL benchmarks.
+
+    Args:
+        df_all: Full consolidated DataFrame
+        fixed_model_names: List of 3 model prefix names (e.g., ['simpledense_NFT_reh_fld_2', ...])
+        base_search_dir: Base directory to search for model files
+
+    Returns:
+        list: [(model_path, display_name, model_prefix), ...] for 3 models
+    """
+    if fixed_model_names is None or len(fixed_model_names) != 3:
+        print("ERROR: Must provide exactly 3 fixed model names")
+        return []
 
     top3_info = []
-    for model_info in top3_models:
-        model_path = find_model_file(model_info['prefix_name'], base_search_dir)
-        if model_path:
-            top3_info.append((model_path, model_info['display_name'], model_info['accuracy']))
 
-    return output_df, top3_info, pd.DataFrame(best_models_full)
+    for model_prefix in fixed_model_names:
+        # Find the model file
+        model_path = find_model_file(model_prefix, base_search_dir)
+
+        if model_path is None:
+            print(f"  WARNING: Model file not found for {model_prefix}")
+            continue
+
+        # Get display name from CSV
+        matching_rows = df_all[df_all['prefix_name'] == model_prefix]
+        if len(matching_rows) == 0:
+            print(f"  WARNING: No CSV entry found for {model_prefix}")
+            continue
+
+        model_row = matching_rows.iloc[0]
+        architecture = extract_model_architecture(model_row['Model'])
+        display_name = map_to_display_name(architecture)
+
+        top3_info.append((model_path, display_name, model_prefix))
+        print(f"  Found: {model_prefix} -> {display_name}")
+
+    return top3_info
+
+
+def auto_detect_top3_models(df_all, training_dataset, base_search_dir):
+    """
+    Auto-detect Top-3 models based on training dataset.
+
+    For REH: Uses SimpleDense, EnhanceDense, FeatureEmbedding (best fold each)
+    For others: Uses top 3 DL models by average accuracy across all benchmarks
+
+    CRITICAL: DeepDense is NEVER included.
+    """
+    print(f"\nAuto-detecting Top-3 models for {training_dataset}...")
+
+    # Filter out DeepDense completely
+    df_dl = df_all[df_all['Model'].apply(lambda x: extract_model_architecture(x).lower() not in ['deepdense', 'dd', 'dnn4'])].copy()
+
+    # For REH: Use SimpleDense, EnhanceDense, FeatureEmbedding
+    if 'reh' in training_dataset.lower():
+        print("  Using REH default: SimpleDense, EnhanceDense, FeatureEmbedding")
+
+        target_archs = ['simpledense', 'enhancedense', 'featureembedding']
+        top3_info = []
+
+        for arch in target_archs:
+            arch_models = df_dl[df_dl['Model'].apply(lambda x: extract_model_architecture(x).lower() == arch)].copy()
+
+            if len(arch_models) == 0:
+                print(f"  WARNING: No models found for {arch}")
+                continue
+
+            # Find best fold by average accuracy across all benchmarks
+            benchmarks = ['sup', 'gse146773', 'gse64016', 'buettner_mesc']
+            arch_models['avg_accuracy'] = arch_models[[f'{b}_accuracy' for b in benchmarks]].mean(axis=1)
+
+            best_idx = arch_models['avg_accuracy'].idxmax()
+            best_model = arch_models.loc[best_idx]
+
+            model_prefix = best_model['prefix_name']
+            model_path = find_model_file(model_prefix, base_search_dir)
+
+            if model_path:
+                display_name = map_to_display_name(arch)
+                top3_info.append((model_path, display_name, model_prefix))
+                print(f"  Selected: {model_prefix} (avg accuracy: {best_model['avg_accuracy']:.2f}%)")
+
+        return top3_info
+
+    else:
+        # For other datasets: Use top 3 DL models by average accuracy
+        print("  Using top 3 DL models by average accuracy across all benchmarks")
+
+        # Calculate average accuracy across all benchmarks
+        benchmarks = ['sup', 'gse146773', 'gse64016', 'buettner_mesc']
+        df_dl['avg_accuracy'] = df_dl[[f'{b}_accuracy' for b in benchmarks]].mean(axis=1)
+
+        # Exclude traditional ML models
+        dl_only = df_dl[~df_dl['Model'].apply(lambda x: extract_model_architecture(x).lower() in ['lightgbm', 'lgbm', 'adaboost', 'randomforest', 'random', 'ensemble'])].copy()
+
+        # Sort by average accuracy and get top 3
+        top3_models = dl_only.nlargest(3, 'avg_accuracy')
+
+        top3_info = []
+        for _, model_row in top3_models.iterrows():
+            model_prefix = model_row['prefix_name']
+            model_path = find_model_file(model_prefix, base_search_dir)
+
+            if model_path:
+                architecture = extract_model_architecture(model_row['Model'])
+                display_name = map_to_display_name(architecture)
+                top3_info.append((model_path, display_name, model_prefix))
+                print(f"  Selected: {model_prefix} (avg accuracy: {model_row['avg_accuracy']:.2f}%)")
+
+        return top3_info
 
 
 def run_ensemble_fusion(top3_info, benchmark):
-    """Run ensemble fusion and return metrics."""
+    """
+    Run ensemble fusion using FIXED Top-3 models.
+
+    Returns metrics for both Decision Fusion and Score Fusion.
+    """
     if len(top3_info) != 3:
+        print(f"  ERROR: Need exactly 3 models for ensemble, got {len(top3_info)}")
         return None, None
 
     model_paths = [info[0] for info in top3_info]
@@ -301,7 +425,6 @@ def run_ensemble_fusion(top3_info, benchmark):
     try:
         df_result = decision_level_fusion(model_paths, fusion_benchmark)
 
-        # Fix MCC/Kappa scale
         mcc_val = fix_metric_scale(df_result[f'{benchmark}_mcc'].values[0])
         kappa_val = fix_metric_scale(df_result[f'{benchmark}_kappa'].values[0])
 
@@ -320,7 +443,6 @@ def run_ensemble_fusion(top3_info, benchmark):
             'GPU_Memory_MB': None
         }
 
-        # Add per-class precision and recall
         for phase in ['g1', 'g2m', 's']:
             prec_col = f'{benchmark}_precision_{phase}'
             rec_col = f'{benchmark}_recall_{phase}'
@@ -332,12 +454,13 @@ def run_ensemble_fusion(top3_info, benchmark):
 
     except Exception as e:
         print(f"  ERROR in Decision Fusion: {e}")
+        import traceback
+        traceback.print_exc()
         top3df_metrics = None
 
     try:
         sf_result = score_level_fusion(model_paths, fusion_benchmark)
 
-        # Fix MCC/Kappa scale
         mcc_val = fix_metric_scale(sf_result[f'{benchmark}_mcc'].values[0])
         kappa_val = fix_metric_scale(sf_result[f'{benchmark}_kappa'].values[0])
 
@@ -356,7 +479,6 @@ def run_ensemble_fusion(top3_info, benchmark):
             'GPU_Memory_MB': None
         }
 
-        # Add per-class precision and recall
         for phase in ['g1', 'g2m', 's']:
             prec_col = f'{benchmark}_precision_{phase}'
             rec_col = f'{benchmark}_recall_{phase}'
@@ -368,13 +490,20 @@ def run_ensemble_fusion(top3_info, benchmark):
 
     except Exception as e:
         print(f"  ERROR in Score Fusion: {e}")
+        import traceback
+        traceback.print_exc()
         top3sf_metrics = None
 
     return top3df_metrics, top3sf_metrics
 
 
 def generate_heatmap(all_benchmark_data, output_dir):
-    """Generate precision/recall heatmap for all benchmarks."""
+    """
+    Generate precision/recall heatmap for all benchmarks.
+
+    EXACT COPY from original 3_generate_all_benchmark_results.py
+    Creates single large heatmap with Blues colormap and vertical separators.
+    """
 
     print("\n" + "="*70)
     print("GENERATING PRECISION/RECALL HEATMAP")
@@ -404,7 +533,7 @@ def generate_heatmap(all_benchmark_data, output_dir):
     df_first = df_first.sort_values('sort_key').drop('sort_key', axis=1).reset_index(drop=True)
 
     models = df_first['Model'].tolist()
-    display_models = [MODEL_DISPLAY_NAMES_HEATMAP.get(m, m) for m in models]
+    display_models = [HEATMAP_MODEL_NAMES.get(m, m) for m in models]
 
     # Build data matrix
     all_columns = []
@@ -479,7 +608,7 @@ def generate_heatmap(all_benchmark_data, output_dir):
     for benchmark, pos in benchmark_positions:
         ax.text(pos, -2.5, benchmark, ha='center', va='bottom', fontsize=16, fontweight='bold')
 
-    # Metric labels (middle) with red lines
+    # Metric labels (middle)
     metric_positions = []
     current_key = None
     start_idx = 0
@@ -498,11 +627,8 @@ def generate_heatmap(all_benchmark_data, output_dir):
 
     for metric, pos, start, end in metric_positions:
         ax.text(pos, -1.2, metric, ha='center', va='bottom', fontsize=14)
-        # Red bar removed per user request
-        # if metric == 'Precision':
-        #     ax.plot([start, end], [-0.5, -0.5], color='red', linewidth=3, clip_on=False)
 
-    # Vertical separators
+    # Vertical separators between benchmarks
     current_benchmark = col_structure[0][0]
     for i, (benchmark, metric, phase) in enumerate(col_structure):
         if benchmark != current_benchmark:
@@ -538,9 +664,11 @@ def generate_heatmap(all_benchmark_data, output_dir):
 # ============================================================================
 
 def main():
-    parser = argparse.ArgumentParser(description='Generate all benchmark results + heatmap')
+    parser = argparse.ArgumentParser(description='Generate all benchmark results + heatmap (FIXED Top-3 models)')
     parser.add_argument('--input', '-i', required=True, help='Path to consolidated CSV file')
     parser.add_argument('--model-dir', '-m', default=None, help='Base directory for model files')
+    parser.add_argument('--fixed-models', '-f', nargs=3, default=None,
+                        help='Fixed model prefix names (3 required, e.g., simpledense_NFT_reh_fld_2 enhancedense_NFT_reh_fld_3 fe_NFT_reh_fld_5)')
     parser.add_argument('--skip-ensemble', action='store_true', help='Skip ensemble fusion')
     parser.add_argument('--skip-heatmap', action='store_true', help='Skip heatmap generation')
 
@@ -551,9 +679,11 @@ def main():
         sys.exit(1)
 
     print("="*70)
-    print("COMPREHENSIVE BENCHMARK RESULTS GENERATOR")
+    print("FIXED COMPREHENSIVE BENCHMARK RESULTS GENERATOR")
     print("="*70)
     print(f"\nInput: {args.input}")
+    print(f"Model directory: {args.model_dir}")
+    print(f"Fixed models: {args.fixed_models if args.fixed_models else 'Auto-detect'}")
     print(f"Skip ensemble: {args.skip_ensemble}")
     print(f"Skip heatmap: {args.skip_heatmap}")
 
@@ -562,19 +692,35 @@ def main():
     df_all = pd.read_csv(args.input)
     print(f"  Total models: {len(df_all)}")
 
-    # Extract training dataset name from first row
+    # Extract training dataset name
     training_dataset = extract_training_dataset(df_all['prefix_name'].iloc[0])
     if training_dataset is None:
         print("ERROR: Could not extract training dataset name from prefix_name")
         sys.exit(1)
     print(f"  Detected training dataset: {training_dataset}")
 
+    # Find FIXED Top-3 models (ONCE for ALL benchmarks)
+    top3_info = None
+    if not args.skip_ensemble:
+        if args.fixed_models:
+            print("\nUsing user-specified fixed Top-3 models:")
+            top3_info = find_fixed_top3_models(df_all, args.fixed_models, args.model_dir)
+        else:
+            top3_info = auto_detect_top3_models(df_all, training_dataset, args.model_dir)
+
+        if len(top3_info) != 3:
+            print(f"\nWARNING: Could not find 3 models, ensemble fusion will be skipped")
+            top3_info = None
+        else:
+            print(f"\nFIXED Top-3 models for ALL benchmarks:")
+            for i, (path, name, prefix) in enumerate(top3_info, 1):
+                print(f"  {i}. {name} ({prefix})")
+
     # Process each benchmark
     benchmarks = ['sup', 'gse146773', 'gse64016', 'buettner_mesc']
     all_benchmark_data = {}
 
-    #output_dir = os.path.dirname(args.input) if os.path.dirname(args.input) else '.'
-    output_dir = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/5_visualization/heatmap_barplot_lineplots_csv/"+training_dataset
+    output_dir = f"/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/5_visualization/heatmap_barplot_lineplots_csv/{training_dataset}"
     os.makedirs(output_dir, exist_ok=True)
 
     for benchmark in benchmarks:
@@ -582,26 +728,26 @@ def main():
         print(f"PROCESSING: {benchmark.upper()}")
         print(f"{'='*70}")
 
-        best_df, top3_info, full_data = extract_best_models_for_benchmark(df_all, benchmark, args.model_dir)
+        best_df, full_data = extract_best_models_for_benchmark(df_all, benchmark, args.model_dir)
 
         print(f"\nBest models extracted: {len(best_df)}")
 
-        # Ensemble fusion
-        if not args.skip_ensemble and len(top3_info) == 3:
-            print(f"\nRunning ensemble fusion...")
-            print(f"  Top 3 models: {', '.join([t[1] for t in top3_info])}")
+        # Ensemble fusion using FIXED Top-3 models
+        if top3_info is not None and len(top3_info) == 3:
+            print(f"\nRunning ensemble fusion with FIXED Top-3 models...")
+            print(f"  Models: {', '.join([t[1] for t in top3_info])}")
 
             top3df, top3sf = run_ensemble_fusion(top3_info, benchmark)
 
             if top3df:
                 best_df = pd.concat([best_df, pd.DataFrame([top3df])], ignore_index=True)
-                # Also add to full_data for heatmap
                 full_data = pd.concat([full_data, pd.DataFrame([top3df])], ignore_index=True)
+                print(f"  Top-3 DF Accuracy: {top3df['Accuracy']}%")
 
             if top3sf:
                 best_df = pd.concat([best_df, pd.DataFrame([top3sf])], ignore_index=True)
-                # Also add to full_data for heatmap
                 full_data = pd.concat([full_data, pd.DataFrame([top3sf])], ignore_index=True)
+                print(f"  Top-3 SF Accuracy: {top3sf['Accuracy']}%")
 
         # Sort models by predefined order
         best_df = sort_models_by_order(best_df)
@@ -611,17 +757,20 @@ def main():
         best_df.to_csv(output_file, index=False)
         print(f"\nSaved: {output_file}")
 
-        # Store for heatmap (only if has per-class data)
-        if benchmark != 'sup':  # SUP doesn't need heatmap
+        # Store for heatmap
+        if benchmark != 'sup':
             all_benchmark_data[benchmark] = full_data
 
     # Generate heatmap
     if not args.skip_heatmap and len(all_benchmark_data) > 0:
+        print("\n" + "="*70)
+        print("GENERATING PRECISION/RECALL HEATMAP")
+        print("="*70)
         generate_heatmap(all_benchmark_data, output_dir)
 
-    # Automatically call plotting script
+    # Automatically call line plot script (4_plot_benchmark_results.py)
     print("\n" + "="*70)
-    print("GENERATING BENCHMARK COMPARISON PLOTS")
+    print("GENERATING BENCHMARK LINE PLOTS")
     print("="*70)
 
     plot_script = os.path.join(os.path.dirname(__file__), '4_plot_benchmark_results.py')
@@ -632,31 +781,27 @@ def main():
             print(f"  Training dataset: {training_dataset}")
 
             subprocess.run([
-                'python', plot_script,
+                sys.executable,
+                plot_script,
                 '--input-dir', output_dir,
                 '--training-dataset', training_dataset
             ], check=True)
 
-            print("\nBenchmark plots generated successfully!")
+            print("  Line plots generated successfully!")
         except subprocess.CalledProcessError as e:
-            print(f"\nWARNING: Plotting script failed with error: {e}")
+            print(f"  WARNING: Line plot generation failed: {e}")
         except Exception as e:
-            print(f"\nWARNING: Could not run plotting script: {e}")
+            print(f"  WARNING: Could not call line plot script: {e}")
     else:
-        print(f"\nWARNING: Plotting script not found: {plot_script}")
+        print(f"  WARNING: Plot script not found: {plot_script}")
 
     print("\n" + "="*70)
-    print("ALL DONE!")
+    print("DONE!")
     print("="*70)
-    print(f"\nGenerated files in: {output_dir}/")
-    print(f"  - sup_results_{training_dataset}.csv")
-    print(f"  - gse146773_results_{training_dataset}.csv")
-    print(f"  - gse64016_results_{training_dataset}.csv")
-    print(f"  - buettner_mesc_results_{training_dataset}.csv")
-    if not args.skip_heatmap:
-        print(f"  - precision_recall_heatmap_3benchmarks.pdf/png/jpg")
-    print("="*70 + "\n")
+    print(f"\nAll results saved to: {output_dir}/")
+    print("\nNOTE: Run 5_plot_tool_comparison_barplot.py separately to compare with existing tools:")
+    print(f"  python 5_plot_tool_comparison_barplot.py --training-dataset {training_dataset}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
