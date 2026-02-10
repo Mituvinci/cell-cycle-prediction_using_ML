@@ -119,18 +119,25 @@ python 2_model_training/train_deep_learning.py \
   - Download: [10x Genomics](https://www.10xgenomics.com/datasets/10-k-brain-cells-from-an-e-18-mouse-v-3-chemistry-3-standard-3-0-0)
 
 ### Benchmark Data (Ground Truth)
-- **GSE146773**: Human U-2 OS cells with FUCCI reporter
+- **GSE146773**: Human U-2 OS cells with FUCCI reporter (Smart-seq2 platform)
   - Download: [https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE146773](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE146773)
-- **GSE64016**: Human ESCs with FUCCI reporter
+
+- **GSE64016**: Human H1-Fucci hESCs (Fluidigm C1 platform)
+  - 247 H1-Fucci single cells sequenced (used to confirm cell cycle gene clusters)
+  - 213 H1 cells also available (used for Oscope evaluation)
+  - Normalized expected counts provided
   - Download: [https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE64016](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE64016)
-- **Buettner_mESC**: Mouse embryonic stem cells with ground-truth labels
-  - 182 single-cell RNA-seq profiles from mouse ESCs
+
+- **Buettner_mESC (E-MTAB-2805)**: Mouse embryonic stem cells (mESC-SMARTer protocol)
+  - Often referred to as mESC-SMARTer
+  - 288 single-cell RNA-seq profiles from mouse ESCs
   - Cell cycle phases (G1, S, G2M) determined by Hoechst 33342 staining and FACS sorting
   - Access via Bioconductor:
     ```R
     library(scRNAseq)
     sce <- BuettnerESCData()
     ```
+  - ArrayExpress: [https://www.ebi.ac.uk/arrayexpress/experiments/E-MTAB-2805/](https://www.ebi.ac.uk/arrayexpress/experiments/E-MTAB-2805/)
   - **Citation**: Buettner, F., Natarajan, K. N., Casale, F. P., et al. *Computational analysis of cell-to-cell heterogeneity in single-cell RNA-sequencing data reveals hidden subpopulations of cells.* Nature Biotechnology 33, 155–160 (2015).
 
 ---
