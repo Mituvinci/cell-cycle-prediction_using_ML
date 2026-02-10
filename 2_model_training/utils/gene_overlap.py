@@ -161,9 +161,9 @@ def get_benchmark_paths():
     data_dir = os.path.join(project_root, "data")
 
     benchmarks = {
-        'GSE146773': os.path.join(data_dir, 'GSE146773_seurat_normalized_gene_expression.csv'),
-        'GSE64016': os.path.join(data_dir, 'GSE64016_seurat_normalized_gene_expression.csv'),
-        'Buettner_mESC': os.path.join(data_dir, 'Buettner_mESC_benchmark_clean.csv')
+        'GSE146773': os.path.join(data_dir, 'benchmarks_preprocessed', 'GSE146773', 'GSE146773_expression.csv'),
+        'GSE64016': os.path.join(data_dir, 'benchmarks_preprocessed', 'GSE64016', 'GSE64016_expression.csv'),
+        'Buettner_mESC': os.path.join(data_dir, 'benchmarks_preprocessed', 'Buettner_mESC', 'Buettner_mESC_expression.csv')
     }
 
     # Check which files exist

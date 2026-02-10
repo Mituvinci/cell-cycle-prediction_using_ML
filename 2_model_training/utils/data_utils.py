@@ -528,8 +528,8 @@ def select_top_k_features(dataset='hpsc', gene_list_path=None, k=2000):
     # Paths to training datasets
     data_dir = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data"
 
-    path_reh = f"{data_dir}/training_data_1_GD428_21136_Hu_REH_Parental_normalized_gene_expression.csv"
-    path_sup = f"{data_dir}/training_data_2_GD444_21136_Hu_Sup_Parental_normalized_gene_expression.csv"
+    path_reh = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_reh/reh_training_data.csv"
+    path_sup = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_sup/sup_training_data.csv"
     path_pbmc = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_human/pbmc_human_training_data.csv"
     path_mouse_brain = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_mouse/mouse_brain_training_data_UPPERCASE.csv"
     path_hpsc = f"{data_dir}/GSE75748_hPSC_final_training_matrix.csv"
@@ -541,6 +541,12 @@ def select_top_k_features(dataset='hpsc', gene_list_path=None, k=2000):
     path_concate_mouse = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_concate_mouse_brain_Nestorova/concatenated_training_data_mouse_brain_Nestorova.csv"
     path_gse75748_nestorova = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_GSE75748_Nestorova/concatenated_training_data_GSE75748_Nestorova.csv"
 
+    # MARKER GENE DATASETS (cell cycle marker genes only, no feature selection)
+    path_concate_4ds_all_marker = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_marker_genes_4ds_all/concatenated_training_data_marker_genes_4ds_all.csv"
+    path_concate_2ds_human_marker = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_marker_genes_2ds_human/concatenated_training_data_marker_genes_2ds_human.csv"
+    path_concate_mouse_marker = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_marker_genes_2ds_mouse/concatenated_training_data_marker_genes_2ds_mouse.csv"
+    path_gse75748_nestorova_marker = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_marker_genes_nestorova_gse75748/concatenated_training_data_marker_genes_nestorova_gse75748.csv"
+
     dataset_paths = {
         'hpsc': path_hpsc,
         'pbmc': path_pbmc,
@@ -551,7 +557,12 @@ def select_top_k_features(dataset='hpsc', gene_list_path=None, k=2000):
         'concate_4ds_all': path_concate_4ds_all,
         'concate_2ds_human': path_concate_2ds_human,
         'concate_mouse': path_concate_mouse,
-        'gse75748_nestorova': path_gse75748_nestorova
+        'gse75748_nestorova': path_gse75748_nestorova,
+        # MARKER GENE DATASETS
+        'concate_4ds_all_marker': path_concate_4ds_all_marker,
+        'concate_2ds_human_marker': path_concate_2ds_human_marker,
+        'concate_mouse_marker': path_concate_mouse_marker,
+        'gse75748_nestorova_marker': path_gse75748_nestorova_marker
     }
 
     if dataset not in dataset_paths:
@@ -637,8 +648,8 @@ def load_and_preprocess_data(scaling_method, dataset='hpsc', gene_list_path=None
     # Paths to training datasets
     data_dir = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data"
 
-    path_reh = f"{data_dir}/training_data_1_GD428_21136_Hu_REH_Parental_normalized_gene_expression.csv"
-    path_sup = f"{data_dir}/training_data_2_GD444_21136_Hu_Sup_Parental_normalized_gene_expression.csv"
+    path_reh = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_reh/reh_training_data.csv"
+    path_sup = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_sup/sup_training_data.csv"
     path_pbmc = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_human/pbmc_human_training_data.csv"
     path_mouse_brain = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_mouse/mouse_brain_training_data_UPPERCASE.csv"
     path_hpsc = f"{data_dir}/GSE75748_hPSC_final_training_matrix.csv"
@@ -649,6 +660,12 @@ def load_and_preprocess_data(scaling_method, dataset='hpsc', gene_list_path=None
     path_concate_2ds_human = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_concate_2_ds_only_pbmchealthy_human_GSE75748/concatenated_training_data_2_ds_only_pbmchealthy_human_GSE75748.csv"
     path_concate_mouse = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_concate_mouse_brain_Nestorova/concatenated_training_data_mouse_brain_Nestorova.csv"
     path_gse75748_nestorova = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_GSE75748_Nestorova/concatenated_training_data_GSE75748_Nestorova.csv"
+
+    # MARKER GENE DATASETS (cell cycle marker genes only, no feature selection)
+    path_concate_4ds_all_marker = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_marker_genes_4ds_all/concatenated_training_data_marker_genes_4ds_all.csv"
+    path_concate_2ds_human_marker = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_marker_genes_2ds_human/concatenated_training_data_marker_genes_2ds_human.csv"
+    path_concate_mouse_marker = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_marker_genes_2ds_mouse/concatenated_training_data_marker_genes_2ds_mouse.csv"
+    path_gse75748_nestorova_marker = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_marker_genes_nestorova_gse75748/concatenated_training_data_marker_genes_nestorova_gse75748.csv"
 
     # Dataset path mapping
     dataset_paths = {
@@ -661,7 +678,12 @@ def load_and_preprocess_data(scaling_method, dataset='hpsc', gene_list_path=None
         'concate_4ds_all': path_concate_4ds_all,
         'concate_2ds_human': path_concate_2ds_human,
         'concate_mouse': path_concate_mouse,
-        'gse75748_nestorova': path_gse75748_nestorova
+        'gse75748_nestorova': path_gse75748_nestorova,
+        # MARKER GENE DATASETS
+        'concate_4ds_all_marker': path_concate_4ds_all_marker,
+        'concate_2ds_human_marker': path_concate_2ds_human_marker,
+        'concate_mouse_marker': path_concate_mouse_marker,
+        'gse75748_nestorova_marker': path_gse75748_nestorova_marker
     }
 
     if dataset not in dataset_paths:
@@ -896,14 +918,16 @@ def load_reh_or_sup_benchmark(scaler, reh_sup="sup", is_old_model=False, scaling
     data_dir = os.path.join(project_root, "data")
 
     if reh_sup == "reh":
+        # REH data is in consensus labeling folder
         path = os.path.join(
-            data_dir,
-            "filtered_normalized_gene_expression_cc_label1_GD428_21136_Hu_REH_Parental_overlapped_all_four_regions.csv"
+            project_root,
+            "cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_reh/reh_training_data.csv"
         )
     else:
+        # SUP data is in consensus labeling folder
         path = os.path.join(
-            data_dir,
-            "filtered_normalized_gene_expression_cc_label2_GD444_21136_Hu_Sup_Parental_overlapped_all_four_regions.csv"
+            project_root,
+            "cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_sup/sup_training_data.csv"
         )
 
     # Load the RNA datasets

@@ -15,6 +15,7 @@ Usage:
 
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import numpy as np
 import os
 import argparse
@@ -340,6 +341,19 @@ def generate_barplot(all_accuracies, output_dir, training_dataset):
             ax.text(bar.get_x() + bar.get_width()/2., height,
                    f'{height:.1f}',
                    ha='center', va='bottom', fontsize=9)
+
+    # Create legend for model types
+    legend_handles = [
+        mpatches.Patch(color='#808080', label='Existing Tools', edgecolor='black', linewidth=1.5),
+        mpatches.Patch(color='#4472C4', label='Deep Learning Models', edgecolor='black', linewidth=1.5),
+        mpatches.Patch(color='#FFA500', label='Traditional ML Models', edgecolor='black', linewidth=1.5),
+        mpatches.Patch(color='#9933CC', label='Ensemble Models', edgecolor='black', linewidth=1.5)
+    ]
+
+    # Add horizontal legend at the bottom
+    fig.legend(handles=legend_handles, loc='lower center', ncol=4,
+              fontsize=12, frameon=True, edgecolor='black',
+              bbox_to_anchor=(0.5, -0.05))
 
     plt.tight_layout()
 

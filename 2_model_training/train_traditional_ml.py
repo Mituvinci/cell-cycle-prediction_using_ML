@@ -77,8 +77,9 @@ Available models:
         required=False,
         default='hpsc',
         choices=['hpsc', 'pbmc', 'mouse_brain', 'reh', 'sup', 'nestorova',
-                 'concate_4ds_all', 'concate_2ds_human', 'concate_mouse', 'gse75748_nestorova'],
-        help='Dataset to use: hpsc, pbmc, mouse_brain, reh, sup, nestorova, concate_4ds_all, concate_2ds_human, concate_mouse, gse75748_nestorova (default: hpsc).'
+                 'concate_4ds_all', 'concate_2ds_human', 'concate_mouse', 'gse75748_nestorova',
+                 'concate_4ds_all_marker', 'concate_2ds_human_marker', 'concate_mouse_marker', 'gse75748_nestorova_marker'],
+        help='Dataset to use: hpsc, pbmc, mouse_brain, reh, sup, nestorova, concate_4ds_all, concate_2ds_human, concate_mouse, gse75748_nestorova, *_marker (marker gene datasets) (default: hpsc).'
     )
 
     parser.add_argument(

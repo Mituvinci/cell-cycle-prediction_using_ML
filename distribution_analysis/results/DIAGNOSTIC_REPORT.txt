@@ -1,0 +1,99 @@
+================================================================================
+PHASE 1: DISTRIBUTION DIAGNOSTIC REPORT
+Cross-Platform Cell Cycle Prediction Analysis
+================================================================================
+
+IMPORTANT: Analysis performed on TRAINING GENES ONLY
+--------------------------------------------------------------------------------
+Gene list: gene_lists/reh_3benchmark_sup.txt
+Number of genes: 12,012 (intersection)
+This ensures fair comparison - analyzing the SAME genes used in training.
+
+OBJECTIVE:
+-----------
+Diagnose why REH-trained models perform well on SUP (~80-90% accuracy)
+but poorly on external benchmarks GSE146773, GSE64016, Buettner_mESC (<67%).
+
+HYPOTHESIS:
+-----------
+Distribution mismatch between training data (REH/SUP) and benchmarks
+due to different sequencing platforms and/or normalization parameters.
+
+================================================================================
+KEY FINDINGS:
+================================================================================
+
+1. EXPRESSION VALUE RANGES:
+----------------------------------------
+  REH            : [  0.00,   5.79]  (Mean: 0.26, Median: 0.00)
+  SUP            : [  0.00,   6.08]  (Mean: 0.25, Median: 0.00)
+  GSE146773      : [  0.00,   6.77]  (Mean: 0.27, Median: 0.08)
+  GSE64016       : [  0.00,   5.17]  (Mean: 0.30, Median: 0.03)
+  Buettner_mESC  : [  0.00,   6.17]  (Mean: 0.27, Median: 0.00)
+
+  OK: Expression ranges are relatively consistent.
+
+2. LOG NORMALIZATION STATUS:
+----------------------------------------
+  REH            : Yes  (Range: [0.00, 5.79])
+  SUP            : Yes  (Range: [0.00, 6.08])
+  GSE146773      : Yes  (Range: [0.00, 6.77])
+  GSE64016       : Yes  (Range: [0.00, 5.17])
+  Buettner_mESC  : Yes  (Range: [0.00, 6.17])
+
+  OK: All datasets appear to be log-normalized.
+
+3. DATA SPARSITY (% ZEROS):
+----------------------------------------
+  REH            :  71.0%
+  SUP            :  76.6%
+  GSE146773      :  40.8%
+  GSE64016       :  35.2%
+  Buettner_mESC  :  49.7%
+
+  WARNING: Sparsity differs by 41.4% across datasets!
+  Different platforms have different dropout rates.
+
+4. GENE DETECTION PER CELL:
+----------------------------------------
+  REH            :    3484 genes/cell
+  SUP            :    2813 genes/cell
+  GSE146773      :    7115 genes/cell
+  GSE64016       :    7781 genes/cell
+  Buettner_mESC  :    6045 genes/cell
+
+5. PLATFORM SUMMARY:
+----------------------------------------
+  Training Data (perform well on each other):
+    - REH: 10x Chromium, Multiomics
+    - SUP: 10x Chromium, Multiomics
+  Benchmarks (poor performance):
+    - GSE146773: Smart-seq2, Higher depth
+    - GSE64016:  Fluidigm C1 (H1-Fucci hESCs, 247 cells)
+    - Buettner:  E-MTAB-2805 (mESC-SMARTer)
+
+
+================================================================================
+RECOMMENDATIONS:
+================================================================================
+
+Based on the distribution analysis:
+
+[IMPORTANT] 2. CONSIDER PLATFORM EFFECTS
+   Problem: Sparsity differs dramatically across platforms.
+   Options:
+     a) Train separate models per platform
+     b) Use platform-aware normalization
+     c) Apply imputation before training
+
+[SCIENTIFIC] 3. REPORT CROSS-PLATFORM LIMITATIONS
+   67% accuracy may be the REALISTIC limit for cross-platform prediction.
+   Compare your results to published tools on same benchmarks.
+
+[MANUSCRIPT] 4. INCLUDE THESE ANALYSES IN SUPPLEMENT
+   Reviewers will appreciate the thorough distribution analysis.
+   Show that you investigated and addressed platform effects.
+
+================================================================================
+END OF REPORT
+================================================================================

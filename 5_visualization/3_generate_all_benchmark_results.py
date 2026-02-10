@@ -142,21 +142,30 @@ HEATMAP_MODEL_NAMES = {
 
 def extract_training_dataset(prefix_name):
     """
-    Extract training dataset name from prefix_name.
+    Extract training dataset name from prefix_name with feature type prefix.
+
+    Recognizes both NFT (No Feature Transformation) and YFT (Yes Feature Transformation).
 
     Examples:
-        - "fe_NFT_reh_fld_1" -> "reh"
-        - "fe_NFT_hpsc_fld_1" -> "hpsc"
-        - "fe_NFT_mouse_brain_fld_1" -> "mouse_brain"
-        - "simpledense_pbmc_fld_2" -> "pbmc"
+        - "fe_NFT_reh_fld_1" -> "nft_reh"
+        - "fe_YFT_reh_fld_1" -> "yft_reh"
+        - "simpledense_NFT_concate_2ds_human_fld_2" -> "nft_concate_2ds_human"
+        - "simpledense_YFT_concate_2ds_human_fld_2" -> "yft_concate_2ds_human"
     """
-    match = re.search(r'_([a-z_]+)_fld', prefix_name.lower())
+    # Match either NFT or YFT, then capture dataset name until _fld
+    match = re.search(r'_(nft|yft)_([a-z0-9_]+)_fld', prefix_name.lower())
+    if match:
+        feature_type = match.group(1)  # 'nft' or 'yft'
+        dataset = match.group(2)        # 'concate_2ds_human', 'reh', etc.
+        return f"{feature_type}_{dataset}"
+
+    # Fallback for old models without NFT/YFT (legacy support)
+    match = re.search(r'_([a-z0-9_]+)_fld', prefix_name.lower())
     if match:
         dataset = match.group(1)
-        # Add 'nft_' prefix for consistency
-        if not dataset.startswith('nft_'):
-            return f"nft_{dataset}"
-        return dataset
+        # If no feature type found, assume NFT (no feature transformation)
+        return f"nft_{dataset}"
+
     return None
 
 def find_model_file(prefix_name, base_search_dir=None):
@@ -359,7 +368,7 @@ def auto_detect_top3_models(df_all, training_dataset, base_search_dir):
                 continue
 
             # Find best fold by average accuracy across all benchmarks
-            benchmarks = ['sup', 'gse146773', 'gse64016', 'buettner_mesc']
+            benchmarks = [ 'gse146773', 'gse64016', 'buettner_mesc']
             arch_models['avg_accuracy'] = arch_models[[f'{b}_accuracy' for b in benchmarks]].mean(axis=1)
 
             best_idx = arch_models['avg_accuracy'].idxmax()
@@ -380,7 +389,7 @@ def auto_detect_top3_models(df_all, training_dataset, base_search_dir):
         print("  Using top 3 DL models by average accuracy across all benchmarks")
 
         # Calculate average accuracy across all benchmarks
-        benchmarks = ['sup', 'gse146773', 'gse64016', 'buettner_mesc']
+        benchmarks = [ 'gse146773', 'gse64016', 'buettner_mesc']
         df_dl['avg_accuracy'] = df_dl[[f'{b}_accuracy' for b in benchmarks]].mean(axis=1)
 
         # Exclude traditional ML models
@@ -415,7 +424,7 @@ def run_ensemble_fusion(top3_info, benchmark):
 
     model_paths = [info[0] for info in top3_info]
     benchmark_map = {
-        'sup': 'SUP',
+       
         'gse146773': 'GSE146773',
         'gse64016': 'GSE64016',
         'buettner_mesc': 'Buettner_mESC'
@@ -717,7 +726,7 @@ def main():
                 print(f"  {i}. {name} ({prefix})")
 
     # Process each benchmark
-    benchmarks = ['sup', 'gse146773', 'gse64016', 'buettner_mesc']
+    benchmarks = [ 'gse146773', 'gse64016', 'buettner_mesc']
     all_benchmark_data = {}
 
     output_dir = f"/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/5_visualization/heatmap_barplot_lineplots_csv/{training_dataset}"
