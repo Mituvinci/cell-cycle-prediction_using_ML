@@ -1,37 +1,23 @@
-#!/usr/bin/env bash
-################################################################################
-# Run Phase 1: Distribution Diagnostic Analysis
-################################################################################
+#!/bin/bash
 
-BASE_DIR="/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction"
-cd "$BASE_DIR"
+# Usage: bash run_phase1_analysis.sh <training_dataset>
+# Example: bash run_phase1_analysis.sh reh
 
-echo "================================================================================"
-echo "PHASE 1: DISTRIBUTION DIAGNOSTIC ANALYSIS"
-echo "================================================================================"
-echo ""
-echo "This analysis will:"
-echo "  1. Load REH, SUP, and all 3 benchmark datasets"
-echo "  2. Compare expression value distributions"
-echo "  3. Check normalization consistency"
-echo "  4. Generate publication-quality plots (300 DPI)"
-echo "  5. Create diagnostic report for reviewers"
-echo ""
-echo "Output directory: distribution_analysis/results/"
-echo "================================================================================"
-echo ""
+if [ $# -eq 0 ]; then
+    echo "ERROR: No training dataset specified"
+    echo "Usage: bash run_phase1_analysis.sh <training_dataset>"
+    echo "Available: reh, sup, pbmc, mouse_brain, nestorova, hpsc"
+    exit 1
+fi
 
-# Activate conda environment
+TRAINING_DATASET=$1
+
+echo "Running distribution analysis for: $TRAINING_DATASET"
+
 source ~/.bashrc
 conda activate pytorch
 
-# Run analysis
-python distribution_analysis/phase1_distribution_diagnostic.py
+python distribution_analysis/phase1_distribution_diagnostic_only_sparsity.py $TRAINING_DATASET
 
 echo ""
-echo "================================================================================"
-echo "ANALYSIS COMPLETE!"
-echo "================================================================================"
-echo ""
-echo "Check results in: distribution_analysis/results/"
-echo ""
+echo "Done! Results saved to: distribution_analysis/result_${TRAINING_DATASET}/"

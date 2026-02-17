@@ -1,24 +1,22 @@
 #!/usr/bin/env python3
 """
-Deep Learning Model Training Script
+Traditional ML Model Training Script
 ====================================
 
-Simple CLI wrapper for perform_nested_cv_dn function.
+Simple CLI wrapper for perform_nested_cv_non_neural function.
 
 Usage:
-    python train_deep_learning.py --model cnn --dataset sup --output ./models/cnn_sup/
+    python train_traditional_ml.py --model adaboost --dataset sup --output ./models/adaboost_sup/
 
 This is exactly how you called it in your original code:
-    perform_nested_cv_dn(
-        model_type=cnn,
+    perform_nested_cv_non_neural(
+        model_type=adaboost,
         reh_or_sup=reh_or_sup,
         save_model_here=models_path,
         selection_method=None,
         scaling_method=standard,
         n_trials=n_trials,
-        epoch_start=epoch_start,
-        epoch_end=epoch_end,
-        cv=cv
+        outer_splits=outer_splits
     )
 
 Author: Halima Akhter
@@ -33,36 +31,33 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import THE MAIN TRAINING FUNCTION
-from utils.nested_cv import perform_nested_cv_dn
+from utils.nested_cv import perform_nested_cv_non_neural
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Train deep learning models for cell cycle prediction using nested CV with Optuna',
+        description='Train traditional ML models for cell cycle prediction using nested CV with Optuna',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Train CNN on SUP data
-  python train_deep_learning.py --model cnn --dataset sup --output ./models/CNN/ --trials 20 --cv 5
+  # Train AdaBoost on SUP data
+  python train_traditional_ml.py --model adaboost --dataset sup --output ./models/AdaBoost/ --trials 20 --cv 5
 
-  # Train DNN3 (SimpleDenseModel) on REH data
-  python train_deep_learning.py --model simpledense --dataset reh --output ./models/DNN3/
+  # Train Random Forest on REH data
+  python train_traditional_ml.py --model random_forest --dataset reh --output ./models/RandomForest/
 
-  # Train with feature selection
-  python train_deep_learning.py --model deepdense --dataset sup --feature-selection ElasticCV --output ./models/DNN5/
+  # Train LGBM with feature selection
+  python train_traditional_ml.py --model lgbm --dataset sup --feature-selection SelectKBest --output ./models/LGBM/
 
-Note:
-  Training uses max_epochs=100 with early_stopping_patience=100 (for testing).
-  Change epochs=100 to epochs=1500 in utils/optuna_utils.py for full training.
-  Optuna optimizes learning_rate, optimizer, and architecture parameters.
+  # Train Ensemble (AdaBoost + RF + LGBM)
+  python train_traditional_ml.py --model ensemble --dataset sup --output ./models/Ensemble/
 
 Available models:
-  - simpledense (DNN3)
-  - deepdense (DNN4/DNN5)
-  - cnn
-  - hbdcnn (Hybrid CNN+Dense)
-  - fe (Feature Embedding)
-  - enhancedense (Enhanced Dense)
+  - adaboost
+  - random_forest
+  - lgbm
+  - catboost
+  - ensemble (VotingClassifier with AdaBoost, RF, LGBM)
         """
     )
 
@@ -71,7 +66,7 @@ Available models:
         '--model',
         type=str,
         required=True,
-        choices=['simpledense', 'deepdense', 'cnn', 'hbdcnn', 'fe', 'enhancedense'],
+        choices=['adaboost', 'random_forest', 'lgbm', 'catboost', 'ensemble'],
         help='Model type to train'
     )
 
@@ -107,7 +102,7 @@ Available models:
         '--feature-selection',
         type=str,
         default=None,
-        choices=['ElasticCV', 'SelectKBest', None],
+        choices=['SelectKBest', 'ElasticCV', None],
         help='Feature selection method (default: None)'
     )
 
@@ -144,47 +139,35 @@ Available models:
         help='Select top K features using SelectKBest ONCE before CV loop (default: None = use all genes from gene list)'
     )
 
-    # Rank-based transformation (domain adaptation for cross-platform evaluation)
-    parser.add_argument(
-        '--rank-transform',
-        action='store_true',
-        default=False,
-        help='Apply per-cell rank transformation before scaling (for cross-platform domain adaptation)'
-    )
-
     args = parser.parse_args()
 
     # Print configuration
     print("=" * 80)
-    print("DEEP LEARNING MODEL TRAINING - NESTED CV WITH OPTUNA")
+    print("TRADITIONAL ML MODEL TRAINING - NESTED CV WITH OPTUNA")
     print("=" * 80)
     print(f"Model: {args.model.upper()}")
     print(f"Dataset: {args.dataset.upper()}")
-    print(f"Gene List: {args.gene_list}")
+    print(f"Gene List: {args.gene_list if args.gene_list else 'None (will compute 7-dataset intersection)'}")
     print(f"Output Directory: {args.output}")
     print(f"Feature Selection: {args.feature_selection if args.feature_selection else 'None'}")
     print(f"SelectKBest (k): {args.select_k if args.select_k else 'None (use all genes)'}")
     print(f"Scaling Method: {args.scaling}")
     print(f"Optuna Trials: {args.trials}")
-    print(f"Max Epochs: 100 (testing mode - change to 1500 for full training)")
-    print(f"Early Stopping Patience: 100")
     print(f"Cross-Validation Folds: {args.cv}")
-    print(f"Rank Transform: {args.rank_transform}")
     print("=" * 80)
     print()
 
-    # Call THE MAIN TRAINING FUNCTION
-    perform_nested_cv_dn(
+    # Call THE MAIN TRAINING FUNCTION (your exact function!)
+    perform_nested_cv_non_neural(
         model_type=args.model,
         dataset=args.dataset,
         save_model_here=args.output,
         selection_method=args.feature_selection,
         scaling_method=args.scaling,
         n_trials=args.trials,
-        cv=args.cv,
+        outer_splits=args.cv,
         gene_list_path=args.gene_list,
-        select_k=args.select_k,
-        rank_transform=args.rank_transform
+        select_k=args.select_k
     )
 
     print("\n" + "=" * 80)

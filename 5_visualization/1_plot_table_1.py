@@ -44,8 +44,7 @@ df = pd.read_csv("/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDete
 df["Dataset"] = df["Dataset"].astype(str)
 
 # Reorder datasets: training first, then benchmarks
-order_keywords = ["GSE75748", "PBMC", "Mouse Brain","Nestorova", "GSE146773", "GSE64016", "Buettner"]
-df = df[~df["Dataset"].str.contains("REH|SUP", case=False)]
+order_keywords = ["REH", "SUP-B15", "GSE75748", "PBMC", "Mouse Brain", "Nestorowa", "GSE146773", "GSE64016", "Buettner"]
 df["_order"] = df["Dataset"].apply(lambda d: next((i for i, kw in enumerate(order_keywords) if kw in d), 999))
 df = df.sort_values("_order").drop(columns=["_order"]).reset_index(drop=True)
 
@@ -54,12 +53,12 @@ df = df.sort_values("_order").drop(columns=["_order"]).reset_index(drop=True)
 # ============================================================================
 
 # Figure size optimized for 2-column journal layout (max width ~7 inches)
-fig, ax = plt.subplots(figsize=(10, 6))
+fig, ax = plt.subplots(figsize=(14, 6))
 
 # Bar positions and width
 gap = 0.6
 x = np.arange(len(df), dtype=float)
-x[4:] += gap  # add space around the separator line
+x[6:] += gap  # add space around the separator line (6 training, 3 benchmarks)
 width = 0.25
 
 # Professional color scheme (colorblind-friendly)
@@ -88,7 +87,7 @@ for i, row in df.iterrows():
         ax.add_patch(rect)
 
 # Vertical dashed line to separate training datasets from benchmarks
-ax.axvline(x=(x[3] + x[4]) / 2, color='black', linestyle='--', linewidth=1.5)
+ax.axvline(x=(x[5] + x[6]) / 2, color='black', linestyle='--', linewidth=1.5)
 
 # ============================================================================
 # FONT SIZES (Publication Standard)

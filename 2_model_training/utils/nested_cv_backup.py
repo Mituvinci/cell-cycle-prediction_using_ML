@@ -38,8 +38,7 @@ def perform_nested_cv_dn(
     n_trials=2,
     cv=5,
     gene_list_path=None,
-    select_k=None,
-    rank_transform=False
+    select_k=None
 ):
     """
     Performs nested cross-validation for PyTorch models.
@@ -129,8 +128,7 @@ def perform_nested_cv_dn(
 
         # Load and preprocess data using selected gene list (either original or top-k selected)
         X_train, X_test, y_train_encoded, y_test, cell_ids_test, scaler, label_encoder = load_and_preprocess_data(
-            scaling_method=scaling_method, dataset=dataset, gene_list_path=selected_gene_list_path, selection_method=selection_method,
-            rank_transform=rank_transform
+            scaling_method=scaling_method, dataset=dataset, gene_list_path=selected_gene_list_path, selection_method=selection_method
         )
 
         input_dim = X_train.shape[1]
@@ -278,12 +276,6 @@ def perform_nested_cv_dn(
         # Save scaler for later use
         save_scaler(scaler, SCALER_SAVE_PATH)
 
-        # Save rank_transform marker if used
-        if rank_transform:
-            rank_marker_path = os.path.join(save_model_here, f"{prefix_name}_rank_transform.txt")
-            with open(rank_marker_path, 'w') as f:
-                f.write("rank_transform=True\n")
-
         label_encoder_filepath = os.path.join(save_model_here, f"{prefix_name}_le.pkl")
         joblib.dump(label_encoder, label_encoder_filepath)
 
@@ -363,8 +355,7 @@ def perform_nested_cv_non_neural(
     n_trials=20,              # How many Optuna trials
     outer_splits=5,          # Outer folds
     gene_list_path=None,
-    select_k=None,
-    rank_transform=False
+    select_k=None
 ):
     """
     Nested CV approach for Traditional ML models:
@@ -451,8 +442,7 @@ def perform_nested_cv_non_neural(
 
         # (A) Load data for this outer fold using selected gene list (either original or top-k selected)
         X_train, X_test, y_train, y_test, cell_ids_test, scaler, label_encoder = load_and_preprocess_data(
-            scaling_method=scaling_method, dataset=dataset, gene_list_path=selected_gene_list_path, selection_method=selection_method,
-            rank_transform=rank_transform
+            scaling_method=scaling_method, dataset=dataset, gene_list_path=selected_gene_list_path, selection_method=selection_method
         )
 
         # (B) Align features
@@ -541,12 +531,6 @@ def perform_nested_cv_non_neural(
         SCALER_SAVE_PATH = f"{save_model_here}/{prefix_name}_{scaling_method}_scl.pkl"
         # Save scaler for later use
         save_scaler(scaler, SCALER_SAVE_PATH)
-
-        # Save rank_transform marker if used
-        if rank_transform:
-            rank_marker_path = os.path.join(save_model_here, f"{prefix_name}_rank_transform.txt")
-            with open(rank_marker_path, 'w') as f:
-                f.write("rank_transform=True\n")
 
         label_encoder_filepath = os.path.join(save_model_here, f"{prefix_name}_le.pkl")
         joblib.dump(label_encoder, label_encoder_filepath)

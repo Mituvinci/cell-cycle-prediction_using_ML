@@ -139,6 +139,14 @@ Available models:
         help='Select top K features using SelectKBest ONCE before CV loop (default: None = use all genes from gene list)'
     )
 
+    # Rank-based transformation (domain adaptation for cross-platform evaluation)
+    parser.add_argument(
+        '--rank-transform',
+        action='store_true',
+        default=False,
+        help='Apply per-cell rank transformation before scaling (for cross-platform domain adaptation)'
+    )
+
     args = parser.parse_args()
 
     # Print configuration
@@ -154,6 +162,7 @@ Available models:
     print(f"Scaling Method: {args.scaling}")
     print(f"Optuna Trials: {args.trials}")
     print(f"Cross-Validation Folds: {args.cv}")
+    print(f"Rank Transform: {args.rank_transform}")
     print("=" * 80)
     print()
 
@@ -167,7 +176,8 @@ Available models:
         n_trials=args.trials,
         outer_splits=args.cv,
         gene_list_path=args.gene_list,
-        select_k=args.select_k
+        select_k=args.select_k,
+        rank_transform=args.rank_transform
     )
 
     print("\n" + "=" * 80)

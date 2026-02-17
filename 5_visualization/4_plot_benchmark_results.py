@@ -51,6 +51,7 @@ parser.add_argument('--input-dir', '-i', required=False,
                    help='Directory containing benchmark CSV files')
 parser.add_argument('--training-dataset', '-t', required=False, default='reh',
                    help='Training dataset name (reh, hpsc, pbmc, mouse_brain)')
+parser.add_argument('--sup', action='store_true', help='Include SUP-B15 benchmark (excluded by default)')
 
 args = parser.parse_args()
 
@@ -66,8 +67,19 @@ training_dataset = args.training_dataset
 csv_files = {
     'GSE146773': os.path.join(BASE_DIR, f'gse146773_results_{training_dataset}.csv'),
     'GSE64016': os.path.join(BASE_DIR, f'gse64016_results_{training_dataset}.csv'),
-    'Buettner_mESC': os.path.join(BASE_DIR, f'buettner_mesc_results_{training_dataset}.csv'),
-    'SUP-B15': os.path.join(BASE_DIR, f'sup_results_{training_dataset}.csv')
+    'Buettner_mESC': os.path.join(BASE_DIR, f'buettner_mesc_results_{training_dataset}.csv')
+}
+
+# Add SUP-B15 only if --sup flag is provided
+if args.sup:
+    csv_files['SUP-B15'] = os.path.join(BASE_DIR, f'sup_results_{training_dataset}.csv')
+
+# Benchmark display names for plots
+BENCHMARK_DISPLAY_NAMES = {
+    'GSE146773': 'GSE146773',
+    'GSE64016': 'GSE64016',
+    'Buettner_mESC': 'E-MTAB-2805 (Buettner mESC)',
+    'SUP-B15': 'SUP-B15'
 }
 
 # Consistent model order for ALL visualizations
@@ -119,6 +131,8 @@ ALL_METRICS = ['Accuracy', 'AUC', 'F1', 'Kappa', 'Balanced_Accuracy', 'MCC']
 LEGEND_METRICS = ['AUC', 'F1', 'Kappa', 'Balanced_Accuracy', 'MCC']
 
 # Metrics that need to be multiplied by 100 (from -1 to 1 scale)
+# NOTE: After running fix_mcc_kappa_in_existing_csvs.py, the CSV files now have MCC/Kappa in -1 to 1 range
+# So we MUST multiply by 100 for visualization (to show as -100 to 100%)
 SCALE_TO_PERCENT = ['Kappa', 'MCC']
 
 # ============================================================================
@@ -187,18 +201,21 @@ def create_single_panel(df, benchmark_name, ax=None, show_legend=True):
 
     # X-axis: Model names
     ax1.set_xticks(x)
-    ax1.set_xticklabels(df['Model'], rotation=45, ha='right', fontsize=12)
+    ax1.set_xticklabels(df['Model'], rotation=45, ha='right', fontsize=14)
 
     # Y-axis: Percentages
     ax1.set_ylabel('Performance Metrics (%)', fontsize=14, fontweight='bold')
+    ax1.set_ylabel('Performance Metrics (%)', fontsize=14, fontweight='bold', labelpad=15)
+
     ax1.tick_params(axis='y', labelsize=12, labelcolor='black')
 
-    # Panel label (A, B, C, or D)
-    panel_labels = {'GSE146773': 'A', 'GSE64016': 'B', 'Buettner_mESC': 'C', 'SUP-B15': 'D'}
+    # Panel label ((a), (b), (c), or (d))
+    panel_labels = {'GSE146773': '(a)', 'GSE64016': '(b)', 'Buettner_mESC': '(c)', 'SUP-B15': '(d)'}
     panel_letter = panel_labels.get(benchmark_name, '')
 
-    # Add panel label and benchmark name as title
-    title_text = f"{panel_letter}. {benchmark_name}"
+    # Add panel label and benchmark name as title (use display name)
+    display_name = BENCHMARK_DISPLAY_NAMES.get(benchmark_name, benchmark_name)
+    title_text = f"{panel_letter} {display_name}"
     ax1.text(-0.1, 1.05, title_text, transform=ax1.transAxes,
              fontsize=16, fontweight='bold', va='bottom')
 
@@ -297,68 +314,46 @@ if len(data) == 0:
     exit(1)
 
 # ============================================================================
-# GENERATE INDIVIDUAL PANELS
+# GENERATE INDIVIDUAL PANELS - DISABLED (not needed)
 # ============================================================================
 
-print("\nGenerating individual panels...")
+# Individual panels are no longer generated - only combined panels are created below
 
 panel_files = {}
-panel_labels = {'GSE146773': 'A', 'GSE64016': 'B', 'Buettner_mESC': 'C', 'SUP-B15': 'D'}
-
-for benchmark, df in data.items():
-    print(f"\n  Creating Panel for {benchmark}...")
-
-    # Create panel
-    fig, ax1, lines, labels = create_single_panel(df, benchmark, show_legend=True)
-
-    # Output filename
-    panel_letter = panel_labels[benchmark]
-    output_base = os.path.join(BASE_DIR, f'panel_{panel_letter}_{benchmark.lower()}')
-
-    # Save as PDF
-    pdf_file = f"{output_base}.pdf"
-    plt.savefig(pdf_file, format='pdf', dpi=600, bbox_inches='tight',
-                transparent=False, facecolor='white')
-    print(f"    PDF saved: {pdf_file}")
-
-    # Save as PNG
-    png_file = f"{output_base}.png"
-    plt.savefig(png_file, format='png', dpi=600, bbox_inches='tight',
-                transparent=False, facecolor='white')
-    print(f"    PNG saved: {png_file}")
-
-    # Save as EPS
-    eps_file = f"{output_base}.eps"
-    plt.savefig(eps_file, format='eps', dpi=600, bbox_inches='tight')
-    print(f"    EPS saved: {eps_file}")
-
-    panel_files[benchmark] = {'pdf': pdf_file, 'png': png_file, 'eps': eps_file}
-
-    plt.close()
+panel_labels = {'GSE146773': '(a)', 'GSE64016': '(b)', 'Buettner_mESC': '(c)', 'SUP-B15': '(d)'}
 
 # ============================================================================
-# GENERATE COMBINED 2x2 GRID LAYOUT WITH SHARED LEGEND
+# GENERATE COMBINED GRID LAYOUT WITH SHARED LEGEND
 # ============================================================================
 
-print("\n\nGenerating combined 2x2 grid layout (A + B + C + D) with shared legend...")
-
-# Create figure with 2x2 grid
-fig = plt.figure(figsize=(18, 14))
-gs = fig.add_gridspec(2, 2, hspace=0.35, wspace=0.35,
-                      left=0.08, right=0.92, top=0.92, bottom=0.15)
-
-# Define panel order: Row 1: GSE146773, GSE64016; Row 2: Buettner_mESC, SUP-B15
-benchmark_grid = [
-    ['GSE146773', 'GSE64016'],      # Row 1
-    ['Buettner_mESC', 'SUP-B15']    # Row 2
-]
+if args.sup:
+    # 2x2 grid with SUP
+    print("\n\nGenerating combined 2x2 grid layout (A + B + C + D) with shared legend...")
+    fig = plt.figure(figsize=(18, 14))
+    gs = fig.add_gridspec(2, 2, hspace=0.35, wspace=0.35,
+                          left=0.08, right=0.92, top=0.82, bottom=0.08)
+    benchmark_grid = [
+        ['GSE146773', 'GSE64016'],
+        ['Buettner_mESC', 'SUP-B15']
+    ]
+    grid_shape = (2, 2)
+else:
+    # 1x3 grid without SUP
+    print("\n\nGenerating combined 1x3 grid layout (A + B + C) with shared legend...")
+    fig = plt.figure(figsize=(20, 3.5))
+    gs = fig.add_gridspec(1, 3, hspace=0.25, wspace=0.28,
+                          left=0.05, right=0.95, top=0.68, bottom=0.18)
+    benchmark_grid = [
+        ['GSE146773', 'GSE64016', 'Buettner_mESC']
+    ]
+    grid_shape = (1, 3)
 
 # Create subplots
 legend_lines = None
 legend_labels = None
 
-for row in range(2):
-    for col in range(2):
+for row in range(grid_shape[0]):
+    for col in range(grid_shape[1]):
         benchmark = benchmark_grid[row][col]
         if benchmark in data:
             print(f"  Adding Panel {panel_labels[benchmark]}: {benchmark}...")
@@ -366,7 +361,6 @@ for row in range(2):
             fig_temp, ax1, lines, labels = create_single_panel(
                 data[benchmark], benchmark, ax=ax, show_legend=False
             )
-            # Store legend data from first panel
             if legend_lines is None:
                 legend_lines = lines
                 legend_labels = labels
@@ -379,20 +373,23 @@ for row in range(2):
             ax.set_xticks([])
             ax.set_yticks([])
 
-# Add single shared legend at the bottom center
+# Add single shared legend at the top center (above panel titles)
 if legend_lines is not None:
     fig.legend(legend_lines, legend_labels,
-              loc='lower center',
+              loc='upper center',
               ncol=5,  # 5 metrics in one row
               fontsize=14,
               frameon=True,
               fancybox=False,
               edgecolor='black',
               framealpha=0.95,
-              bbox_to_anchor=(0.5, 0.02))
+              bbox_to_anchor=(0.5, 1.0))
 
 # Output filename
-output_base = os.path.join(BASE_DIR, 'combined_panels_ABCD')
+if args.sup:
+    output_base = os.path.join(BASE_DIR, 'combined_panels_ABCD')
+else:
+    output_base = os.path.join(BASE_DIR, 'combined_panels_ABC')
 
 # Save as PDF
 pdf_file = f"{output_base}.pdf"
@@ -421,22 +418,23 @@ print("\n" + "="*70)
 print("PUBLICATION-QUALITY FIGURE GENERATION COMPLETE!")
 print("="*70)
 
-print("\nINDIVIDUAL PANELS:")
-for benchmark, files in panel_files.items():
-    panel_letter = panel_labels[benchmark]
-    print(f"\n  Panel {panel_letter} ({benchmark}):")
-    for fmt, filepath in files.items():
-        print(f"    {fmt.upper()}: {os.path.basename(filepath)}")
-
-print("\nCOMBINED LAYOUT (2x2 Grid):")
-print(f"  PDF: {os.path.basename(pdf_file)}")
-print(f"  PNG: {os.path.basename(png_file)}")
-print(f"  EPS: {os.path.basename(eps_file)}")
-
-print("\nGRID LAYOUT:")
-print("  Row 1: Panel A (GSE146773) | Panel B (GSE64016)")
-print("  Row 2: Panel C (Buettner_mESC) | Panel D (SUP-B15)")
-print("  Shared legend at bottom center")
+if args.sup:
+    print("\nCOMBINED LAYOUT (2x2 Grid):")
+    print(f"  PDF: {os.path.basename(pdf_file)}")
+    print(f"  PNG: {os.path.basename(png_file)}")
+    print(f"  EPS: {os.path.basename(eps_file)}")
+    print("\nGRID LAYOUT:")
+    print("  Row 1: Panel A (GSE146773) | Panel B (GSE64016)")
+    print("  Row 2: Panel C (E-MTAB-2805 Buettner mESC) | Panel D (SUP-B15)")
+    print("  Shared legend at bottom center")
+else:
+    print("\nCOMBINED LAYOUT (1x3 Grid):")
+    print(f"  PDF: {os.path.basename(pdf_file)}")
+    print(f"  PNG: {os.path.basename(png_file)}")
+    print(f"  EPS: {os.path.basename(eps_file)}")
+    print("\nGRID LAYOUT:")
+    print("  Panel A (GSE146773) | Panel B (GSE64016) | Panel C (E-MTAB-2805 Buettner mESC)")
+    print("  Shared legend at bottom center")
 
 print("\nFIGURE SPECIFICATIONS:")
 print("  Font: Times New Roman")

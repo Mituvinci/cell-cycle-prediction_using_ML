@@ -60,15 +60,34 @@ PATH_TABLE1_CSV = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDet
 
 # File path mapping (dataset name prefix -> file path)
 DATASET_FILE_PATHS = {
-    'REH': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/filtered_normalized_gene_expression_cc_label1_GD428_21136_Hu_REH_Parental_overlapped_all_four_regions.csv",
-    'SUP-B15': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/filtered_normalized_gene_expression_cc_label2_GD444_21136_Hu_Sup_Parental_overlapped_all_four_regions.csv",
+    'REH': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_reh/reh_training_data.csv",
+    'SUP-B15': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_sup/sup_training_data.csv",
     'PBMC': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_human/pbmc_human_training_data.csv",
-    'Mouse Brain': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_mouse/mouse_brain_full_consensus_with_genes.csv",
-    'GSE75748': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/GSE75748_hPSC_final_training_matrix.csv",
-    'GSE146773': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/GSE146773_seurat_normalized_gene_expression.csv",
-    'GSE64016': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/GSE64016_seurat_normalized_gene_expression.csv",
-    'Buettner mESC': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/Buettner_mESC_benchmark_clean.csv"
+    'Mouse Brain': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_mouse/mouse_brain_training_data.csv",
+    'Nestorowa': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_nestorova/nestorova_training_data.csv",
+    'GSE75748': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_gse75748/gse75748_training_data.csv",
+    'GSE146773': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/benchmarks_preprocessed/GSE146773/GSE146773_expression.csv",
+    'GSE64016': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/benchmarks_preprocessed/GSE64016/GSE64016_expression.csv",
+    'Buettner mESC': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/benchmarks_preprocessed/Buettner_mESC/Buettner_mESC_expression.csv"
 }
+
+TRAINING_ORDER = [
+    "REH",
+    "PBMC",
+    "Mouse Brain",
+    "Nestorowa",
+    "GSE75748"
+]
+
+BENCHMARK_ORDER = [
+    "SUP-B15",
+    "GSE146773",
+    "GSE64016",
+    "Buettner mESC"
+]
+
+DATASET_ORDER = TRAINING_ORDER + BENCHMARK_ORDER
+
 
 def load_dataset_config():
     """Load dataset configuration from plot_table1.csv."""
@@ -141,14 +160,31 @@ def load_dataset(path, name, expected_count):
     print(f"\nLoading {name}...")
     df = pd.read_csv(path)
 
-    # Special handling for Buettner: merge with ground truth
-    if 'Buettner' in name:
-        print(f"  Merging with ground truth labels...")
-        ground_truth_path = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/Buettner_mESC_goundTruth.csv"
-        df_gt = pd.read_csv(ground_truth_path)
-        # Merge on Cell_ID
-        df = df.merge(df_gt[['Cell_ID', 'Phase']], on='Cell_ID', how='inner')
-        print(f"  After merge: {len(df)} cells")
+    # Special handling for benchmarks: expression and labels are in separate files
+    BENCHMARK_LABELS = {
+        'Buettner': {
+            'path': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/benchmarks_preprocessed/Buettner_mESC/Buettner_mESC_labels.csv",
+            'id_col': 'CellID', 'phase_col': 'Predicted'
+        },
+        'GSE146773': {
+            'path': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/benchmarks_preprocessed/GSE146773/GSE146773_labels.csv",
+            'id_col': 'barcodes', 'phase_col': 'paper_phase'
+        },
+        'GSE64016': {
+            'path': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/benchmarks_preprocessed/GSE64016/GSE64016_labels.csv",
+            'id_col': 'barcodes', 'phase_col': 'Labeled'
+        }
+    }
+
+    for bench_key, bench_info in BENCHMARK_LABELS.items():
+        if bench_key in name:
+            print(f"  Merging with ground truth labels...")
+            df_gt = pd.read_csv(bench_info['path'])
+            # Rename to standard columns for merge
+            df_gt = df_gt.rename(columns={bench_info['id_col']: 'CellID', bench_info['phase_col']: 'Predicted'})
+            df = df.merge(df_gt[['CellID', 'Predicted']], on='CellID', how='inner')
+            print(f"  After merge: {len(df)} cells")
+            break
 
     # Standardize column names to uppercase
     rename_dict = {}
@@ -191,6 +227,8 @@ def load_dataset(path, name, expected_count):
         if len(df) != expected_total:
             print(f"  WARNING: Expected {expected_total} cells but got {len(df)}")
             print(f"  Expected: G1={expected_count['G1']}, S={expected_count['S']}, G2M={expected_count['G2M']}")
+   
+   
 
     return df, phase_col
 
@@ -234,7 +272,14 @@ def get_marker_expression(df, genes, dataset_name):
 def plot_heatmap(data_dict, output_name, title):
     """Create publication-quality heatmap of marker gene expression."""
     # Prepare data for heatmap
-    datasets = list(data_dict.keys())
+    #datasets = list(data_dict.keys())
+    datasets = []
+
+    for ordered_name in DATASET_ORDER:
+      for actual_name in data_dict.keys():
+          if ordered_name in actual_name:
+            datasets.append(actual_name)
+
 
     # Get all available genes across datasets
     all_genes = set()
@@ -374,6 +419,17 @@ def main():
             all_stats.append(stats)
 
     stats_df = pd.DataFrame(all_stats)
+    # Enforce consistent dataset order (training first, then benchmark)
+    # Dataset names from plot_table1.csv are long (e.g. "REH (Human,  scMultiom)")
+    # DATASET_ORDER has short names (e.g. "REH"), so we sort by matching short name position
+    def get_order(dataset_name):
+        for i, short_name in enumerate(DATASET_ORDER):
+            if short_name in dataset_name:
+                return i
+        return 999
+    stats_df['_order'] = stats_df['Dataset'].apply(get_order)
+    stats_df = stats_df.sort_values('_order').drop(columns=['_order']).reset_index(drop=True)
+
     print("\nOverall Statistics:")
     print(stats_df.to_string(index=False))
 

@@ -21,7 +21,6 @@ from sklearn.feature_selection import SelectKBest, f_classif
 from sklearn.linear_model import ElasticNetCV
 from imblearn.over_sampling import SMOTE, ADASYN
 from imblearn.under_sampling import RandomUnderSampler, ClusterCentroids
-from scipy.stats import rankdata
 
 #######################################################
 #           BENCHMARK DATA CONFIGURATION              #
@@ -224,7 +223,7 @@ def elasticnet_feature_selection(X_scaled, y, alphas=np.logspace(-3, 1, 10), l1_
     return X_scaled.columns[selected_features]  # Return selected feature names
 
 
-def preprocess_rna_data(data, scaling_method, selection_method=None, rank_transform=False):
+def preprocess_rna_data(data, scaling_method, selection_method=None):
     """
     Preprocesses RNA data: filtering, feature selection, ADASYN, undersampling, and scaling.
 
@@ -234,8 +233,6 @@ def preprocess_rna_data(data, scaling_method, selection_method=None, rank_transf
         data (pd.DataFrame): Raw RNA-seq data.
         scaling_method (str): Scaling method to use ('standard', 'minmax', 'robust').
         selection_method (str, optional): Feature selection method ('ElasticCV', 'SelectKBest', or None).
-        rank_transform (bool): If True, apply per-cell rank transformation before scaling.
-            Converts expression values to ranks, eliminating platform-specific magnitude differences.
 
     Returns:
         tuple: (X_train_resampled, X_test_scaled, y_train_resampled, y_test, cell_ids_test, scaler, label_encoder)
@@ -303,14 +300,6 @@ def preprocess_rna_data(data, scaling_method, selection_method=None, rank_transf
 
     # Step 7: Save column names before scaling (apply_scaling returns numpy array)
     feature_columns = X_train.columns.tolist()
-
-    # Step 7b: Apply rank transform if requested (BEFORE scaling)
-    if rank_transform:
-        print("  [RANK TRANSFORM] Applying per-cell rank transformation to training and test data...")
-        X_train = rank_transform_percell(X_train)
-        X_test = rank_transform_percell(X_test)
-        print(f"  [RANK TRANSFORM] Train: rank range [{X_train.min().min():.0f}, {X_train.max().max():.0f}]")
-        print(f"  [RANK TRANSFORM] Test:  rank range [{X_test.min().min():.0f}, {X_test.max().max():.0f}]")
 
     # Step 8: Apply Scaling **BEFORE** ADASYN
     X_train_scaled, scaler = apply_scaling(X_train, method=scaling_method)
@@ -622,7 +611,7 @@ def select_top_k_features(dataset='hpsc', gene_list_path=None, k=2000):
     return sorted(selected_features)
 
 
-def load_and_preprocess_data(scaling_method, dataset='hpsc', gene_list_path=None, selection_method=None, rank_transform=False):
+def load_and_preprocess_data(scaling_method, dataset='hpsc', gene_list_path=None, selection_method=None):
     """
     Loads and preprocesses data using a pre-computed gene list.
 
@@ -637,7 +626,6 @@ def load_and_preprocess_data(scaling_method, dataset='hpsc', gene_list_path=None
         dataset (str): Which training data to use ('hpsc', 'pbmc', 'mouse_brain', 'reh', 'sup', 'nestorova', 'concate_4ds_all', 'concate_2ds_human', 'concate_mouse').
         gene_list_path (str): Path to text file with gene names (one per line, UPPERCASE)
         selection_method (str): Feature selection method.
-        rank_transform (bool): If True, apply per-cell rank transformation before scaling.
 
     Returns:
         tuple: (X_train_resampled, X_test, y_train_resampled, y_test, cell_ids_test, scaler, label_encoder)
@@ -737,7 +725,7 @@ def load_and_preprocess_data(scaling_method, dataset='hpsc', gene_list_path=None
 
     # Apply preprocessing to selected training data
     X_train_resampled, X_test, y_train_resampled, y_test, cell_ids_test, scaler, label_encoder = preprocess_rna_data(
-        selected_data, scaling_method, selection_method, rank_transform=rank_transform
+        selected_data, scaling_method, selection_method
     )
 
     return X_train_resampled, X_test, y_train_resampled, y_test, cell_ids_test, scaler, label_encoder
@@ -867,325 +855,6 @@ def scaling_benchmark_triple(benchmark_data, scaler):
     return X_benchmark_triple
 
 
-def get_training_data_path(model_path):
-    """
-    Auto-detect training data CSV path from model path.
-
-    Detects dataset name from the model directory path and returns
-    the corresponding training data CSV path.
-
-    Args:
-        model_path (str): Path to the model file or model directory
-
-    Returns:
-        str: Path to the training data CSV file
-    """
-    import os
-
-    model_path_lower = model_path.lower()
-
-    # Training data paths
-    base = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction"
-
-    dataset_paths = {
-        'reh': os.path.join(base, "1_consensus_labeling/assign/final_training_data_reh/reh_training_data.csv"),
-        'sup': os.path.join(base, "1_consensus_labeling/assign/final_training_data_sup/sup_training_data.csv"),
-        'pbmc': os.path.join(base, "1_consensus_labeling/assign/final_training_data_human/pbmc_human_training_data.csv"),
-        'mouse_brain': os.path.join(base, "1_consensus_labeling/assign/final_training_data_mouse/mouse_brain_training_data_UPPERCASE.csv"),
-        'hpsc': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/GSE75748_hPSC_final_training_matrix.csv",
-        'nestorova': os.path.join(base, "1_consensus_labeling/assign/final_training_data_nestorova/nestorova_training_data.csv"),
-    }
-
-    # Check model path for dataset name
-    for dataset_key, csv_path in dataset_paths.items():
-        if dataset_key in model_path_lower:
-            print(f"  [AUTO-DETECT] Detected training dataset: {dataset_key}")
-            print(f"  [AUTO-DETECT] Training data path: {csv_path}")
-            return csv_path
-
-    raise ValueError(
-        f"Cannot auto-detect training dataset from model path: {model_path}\n"
-        f"Model path must contain one of: {list(dataset_paths.keys())}"
-    )
-
-
-def load_training_data_for_scaling(training_data_path, selected_features):
-    """
-    Load raw training data and filter to selected features for domain adaptation scaling.
-
-    Only loads expression values (no labels, no metadata). Used by quantile
-    normalization and per-gene z-score matching.
-
-    Args:
-        training_data_path (str): Path to training data CSV
-        selected_features (list): List of feature/gene names to keep
-
-    Returns:
-        pd.DataFrame: Raw training expression data (cells x genes), filtered to selected_features
-    """
-    print(f"\n  [DOMAIN ADAPT] Loading training data for distribution matching...")
-    data = pd.read_csv(training_data_path)
-
-    # Convert gene names to UPPERCASE (same as during training)
-    data = uppercase_gene_names(data)
-
-    # Keep only the genes used by the model
-    metadata_cols = ['gex_barcode', 'Predicted', 'Cell_ID', 'cell', 'phase', 'Phase',
-                     'Unnamed: 0', 'dataset', 'Labeled', 'paper_phase']
-    available_genes = [col for col in data.columns if col not in metadata_cols]
-
-    # Match feature format (handle UPPERCASE vs Capitalized)
-    selected_set = set(selected_features)
-    available_set = set(available_genes)
-
-    # Try direct match first
-    matched_features = [f for f in selected_features if f in available_set]
-
-    # If poor match, try case-insensitive matching
-    if len(matched_features) < len(selected_features) * 0.5:
-        available_upper = {g.upper(): g for g in available_genes}
-        matched_features = []
-        rename_map = {}
-        for f in selected_features:
-            f_upper = f.upper()
-            if f_upper in available_upper:
-                orig_name = available_upper[f_upper]
-                matched_features.append(orig_name)
-                if orig_name != f:
-                    rename_map[orig_name] = f
-        training_expr = data[matched_features].copy()
-        if rename_map:
-            training_expr = training_expr.rename(columns=rename_map)
-    else:
-        training_expr = data[matched_features].copy()
-
-    print(f"  [DOMAIN ADAPT] Loaded {len(training_expr)} cells x {len(training_expr.columns)} genes")
-
-    return training_expr
-
-
-def scaling_benchmark_quantile(benchmark_data, scaler, training_data):
-    """
-    Quantile normalization: forces benchmark gene distributions to match training distributions.
-
-    For each gene:
-    1. Rank benchmark values (0 to 1 quantile scale)
-    2. Map each rank to the corresponding quantile value from training data
-    3. Apply saved scaler.transform() as final step
-
-    This ensures that after transformation, benchmark gene distributions
-    look exactly like training gene distributions, addressing the
-    10x Chromium (sparse) vs Smart-seq2 (dense) platform mismatch.
-
-    Args:
-        benchmark_data (pd.DataFrame): Benchmark expression data (cells x genes)
-        scaler: Fitted scaler object from training
-        training_data (pd.DataFrame): Raw training expression data (cells x genes)
-
-    Returns:
-        pd.DataFrame: Quantile-normalized and scaled benchmark data
-    """
-    print(f"\n  [QUANTILE NORM] Applying quantile normalization...")
-    expected_feature_order = scaler.feature_names_in_
-    benchmark_data = benchmark_data[expected_feature_order]
-
-    # Ensure training data has matching columns
-    training_cols = set(training_data.columns)
-    features_to_process = [f for f in expected_feature_order if f in training_cols]
-    missing_in_training = [f for f in expected_feature_order if f not in training_cols]
-
-    if missing_in_training:
-        print(f"  [QUANTILE NORM] WARNING: {len(missing_in_training)} genes not in training data, keeping original values")
-
-    # Quantile-normalize each gene
-    quantile_normalized = benchmark_data.copy()
-    n_quantiles = 1000  # Resolution of quantile mapping
-
-    for gene in features_to_process:
-        bench_vals = benchmark_data[gene].values
-        train_vals = training_data[gene].values
-
-        # Compute training quantile reference values
-        quantile_points = np.linspace(0, 1, n_quantiles)
-        train_quantiles = np.quantile(train_vals, quantile_points)
-
-        # Rank benchmark values to get their quantile positions (0 to 1)
-        bench_ranks = rankdata(bench_vals, method='average') / len(bench_vals)
-
-        # Map benchmark ranks to training quantile values
-        # Use interpolation: for each benchmark rank, find corresponding training value
-        mapped_values = np.interp(bench_ranks, quantile_points, train_quantiles)
-
-        quantile_normalized[gene] = mapped_values
-
-    print(f"  [QUANTILE NORM] Before: benchmark mean={benchmark_data.mean().mean():.4f}, "
-          f"sparsity={((benchmark_data == 0).sum().sum() / benchmark_data.size * 100):.1f}%")
-    print(f"  [QUANTILE NORM] After:  mapped mean={quantile_normalized.mean().mean():.4f}, "
-          f"sparsity={((quantile_normalized == 0).sum().sum() / quantile_normalized.size * 100):.1f}%")
-
-    # Apply saved scaler as final step
-    scaled_data = scaler.transform(quantile_normalized)
-    scaled_data = pd.DataFrame(scaled_data, columns=expected_feature_order)
-
-    print(f"  [QUANTILE NORM] After robust scaling: mean={scaled_data.mean().mean():.4f}, std={scaled_data.std().mean():.4f}")
-
-    return scaled_data
-
-
-def scaling_benchmark_pergene_zscore(benchmark_data, scaler, training_data):
-    """
-    Per-gene z-score matching: transforms each benchmark gene to have the same
-    mean and std as the corresponding training gene.
-
-    For each gene:
-    1. Compute benchmark gene mean and std
-    2. Compute training gene mean and std
-    3. Transform: (benchmark - bench_mean) * (train_std / bench_std) + train_mean
-    4. Apply saved scaler.transform() as final step
-
-    This is a targeted version of domain adaptation that corrects per-gene
-    platform bias (Smart-seq2 higher expression vs 10x Chromium sparse expression).
-
-    Args:
-        benchmark_data (pd.DataFrame): Benchmark expression data (cells x genes)
-        scaler: Fitted scaler object from training
-        training_data (pd.DataFrame): Raw training expression data (cells x genes)
-
-    Returns:
-        pd.DataFrame: Per-gene z-score matched and scaled benchmark data
-    """
-    print(f"\n  [PERGENE ZSCORE] Applying per-gene z-score matching...")
-    expected_feature_order = scaler.feature_names_in_
-    benchmark_data = benchmark_data[expected_feature_order]
-
-    # Ensure training data has matching columns
-    training_cols = set(training_data.columns)
-    features_to_process = [f for f in expected_feature_order if f in training_cols]
-    missing_in_training = [f for f in expected_feature_order if f not in training_cols]
-
-    if missing_in_training:
-        print(f"  [PERGENE ZSCORE] WARNING: {len(missing_in_training)} genes not in training data, keeping original values")
-
-    # Per-gene z-score matching
-    zscore_matched = benchmark_data.copy()
-
-    genes_matched = 0
-    genes_skipped = 0
-    for gene in features_to_process:
-        bench_vals = benchmark_data[gene].values
-        train_vals = training_data[gene].values
-
-        bench_mean = bench_vals.mean()
-        bench_std = bench_vals.std()
-        train_mean = train_vals.mean()
-        train_std = train_vals.std()
-
-        # Skip if benchmark std is zero (constant gene) to avoid division by zero
-        if bench_std < 1e-10:
-            # If training std is also zero, keep as-is; otherwise set to training mean
-            if train_std < 1e-10:
-                zscore_matched[gene] = train_mean
-            else:
-                zscore_matched[gene] = train_mean
-            genes_skipped += 1
-            continue
-
-        # Transform: shift and scale to match training distribution
-        matched_vals = (bench_vals - bench_mean) * (train_std / bench_std) + train_mean
-
-        # Clip negative values to 0 (expression values cannot be negative in log-normalized data)
-        matched_vals = np.maximum(matched_vals, 0)
-
-        zscore_matched[gene] = matched_vals
-        genes_matched += 1
-
-    print(f"  [PERGENE ZSCORE] Matched {genes_matched} genes, skipped {genes_skipped} constant genes")
-    print(f"  [PERGENE ZSCORE] Before: benchmark mean={benchmark_data.mean().mean():.4f}, "
-          f"sparsity={((benchmark_data == 0).sum().sum() / benchmark_data.size * 100):.1f}%")
-    print(f"  [PERGENE ZSCORE] After:  matched mean={zscore_matched.mean().mean():.4f}, "
-          f"sparsity={((zscore_matched == 0).sum().sum() / zscore_matched.size * 100):.1f}%")
-
-    # Apply saved scaler as final step
-    scaled_data = scaler.transform(zscore_matched)
-    scaled_data = pd.DataFrame(scaled_data, columns=expected_feature_order)
-
-    print(f"  [PERGENE ZSCORE] After robust scaling: mean={scaled_data.mean().mean():.4f}, std={scaled_data.std().mean():.4f}")
-
-    return scaled_data
-
-
-def rank_transform_percell(X):
-    """
-    Rank-based transformation: for each cell (row), replaces gene expression
-    values with their ranks among all genes in that cell.
-
-    This eliminates magnitude differences between platforms (10x Chromium vs Smart-seq2)
-    by converting expression levels to relative gene importance within each cell.
-
-    After transformation, all cells have the same value range (1 to N_genes),
-    regardless of sequencing depth or platform-specific dropout rates.
-
-    Ties are handled with 'average' method (tied values get the average rank).
-
-    Args:
-        X (pd.DataFrame or np.ndarray): Expression matrix (cells x genes)
-
-    Returns:
-        pd.DataFrame or np.ndarray: Rank-transformed matrix (same shape)
-    """
-    is_dataframe = isinstance(X, pd.DataFrame)
-
-    if is_dataframe:
-        columns = X.columns
-        index = X.index
-        values = X.values
-    else:
-        values = X
-
-    # Rank each row (cell) independently
-    ranked = np.apply_along_axis(lambda row: rankdata(row, method='average'), axis=1, arr=values)
-
-    if is_dataframe:
-        return pd.DataFrame(ranked, columns=columns, index=index)
-    return ranked
-
-
-def scaling_benchmark_rank(benchmark_data, scaler):
-    """
-    Rank-based scaling for benchmark evaluation: applies per-cell rank transform
-    then the saved scaler.
-
-    Use this ONLY when the model was trained with --rank_transform flag.
-
-    Args:
-        benchmark_data (pd.DataFrame): Benchmark expression data (cells x genes)
-        scaler: Fitted scaler object from training (fitted on rank-transformed data)
-
-    Returns:
-        pd.DataFrame: Rank-transformed and scaled benchmark data
-    """
-    print(f"\n  [RANK TRANSFORM] Applying per-cell rank transformation...")
-    expected_feature_order = scaler.feature_names_in_
-    benchmark_data = benchmark_data[expected_feature_order]
-
-    print(f"  [RANK TRANSFORM] Before: mean={benchmark_data.mean().mean():.4f}, "
-          f"sparsity={((benchmark_data == 0).sum().sum() / benchmark_data.size * 100):.1f}%")
-
-    # Apply rank transform per cell
-    ranked_data = rank_transform_percell(benchmark_data)
-
-    print(f"  [RANK TRANSFORM] After rank: mean={ranked_data.mean().mean():.4f}, "
-          f"min={ranked_data.min().min():.1f}, max={ranked_data.max().max():.1f}")
-
-    # Apply saved scaler (fitted on rank-transformed training data)
-    scaled_data = scaler.transform(ranked_data)
-    scaled_data = pd.DataFrame(scaled_data, columns=expected_feature_order)
-
-    print(f"  [RANK TRANSFORM] After scaling: mean={scaled_data.mean().mean():.4f}, std={scaled_data.std().mean():.4f}")
-
-    return scaled_data
-
-
 def preprocess_benchmark_data(data, title, check_feature=False):
     """
     Preprocesses a benchmark data file (basic preprocessing).
@@ -1219,7 +888,7 @@ def preprocess_benchmark_data(data, title, check_feature=False):
     return (X_labeled, y_labeled, cell_ids_labeled)
 
 
-def data_preprocess_GSE(data, scaler, dataset_name, check_feature=False, is_old_model=False, scaling_method='simple', training_data=None):
+def data_preprocess_GSE(data, scaler, dataset_name, check_feature=False, is_old_model=False, scaling_method='simple'):
     """
     Preprocesses a GSE benchmark data file.
 
@@ -1229,8 +898,7 @@ def data_preprocess_GSE(data, scaler, dataset_name, check_feature=False, is_old_
         dataset_name (str): Dataset name.
         check_feature (bool): Whether to check feature overlap.
         is_old_model (bool): If True, skip capitalization (for old models). Default False.
-        scaling_method (str): Scaling method - 'simple', 'double', 'triple', 'quantile', or 'pergene_zscore'.
-        training_data (pd.DataFrame, optional): Raw training data for quantile/pergene_zscore methods.
+        scaling_method (str): 'simple' (no double normalization) or 'double' (old method). Default 'simple'.
 
     Returns:
         tuple: (X_labeled, y_labeled, cell_ids_labeled)
@@ -1262,18 +930,8 @@ def data_preprocess_GSE(data, scaler, dataset_name, check_feature=False, is_old_
         X_labeled = scaling_benchmark(X_labeled, scaler)
     elif scaling_method == 'triple':
         X_labeled = scaling_benchmark_triple(X_labeled, scaler)
-    elif scaling_method == 'quantile':
-        if training_data is None:
-            raise ValueError("training_data is required for 'quantile' scaling method")
-        X_labeled = scaling_benchmark_quantile(X_labeled, scaler, training_data)
-    elif scaling_method == 'pergene_zscore':
-        if training_data is None:
-            raise ValueError("training_data is required for 'pergene_zscore' scaling method")
-        X_labeled = scaling_benchmark_pergene_zscore(X_labeled, scaler, training_data)
-    elif scaling_method == 'rank':
-        X_labeled = scaling_benchmark_rank(X_labeled, scaler)
     else:
-        raise ValueError(f"Invalid scaling_method: {scaling_method}. Use 'simple', 'double', 'triple', 'quantile', 'pergene_zscore', or 'rank'.")
+        raise ValueError(f"Invalid scaling_method: {scaling_method}. Use 'simple', 'double', or 'triple'.")
 
     # Ensure no NaN values (both old and new models)
     if X_labeled.isna().any().any():
@@ -1284,7 +942,7 @@ def data_preprocess_GSE(data, scaler, dataset_name, check_feature=False, is_old_
     return X_labeled, y_labeled, cell_ids_labeled
 
 
-def load_reh_or_sup_benchmark(scaler, reh_sup="sup", is_old_model=False, scaling_method='simple', training_data=None):
+def load_reh_or_sup_benchmark(scaler, reh_sup="sup", is_old_model=False, scaling_method='simple'):
     """
     Loads REH or SUP benchmark data.
 
@@ -1292,8 +950,7 @@ def load_reh_or_sup_benchmark(scaler, reh_sup="sup", is_old_model=False, scaling
         scaler: Fitted scaler object.
         reh_sup (str): "reh" or "sup" to select dataset.
         is_old_model (bool): If True, skip capitalization (for old models). Default False.
-        scaling_method (str): Scaling method - 'simple', 'double', 'triple', 'quantile', or 'pergene_zscore'.
-        training_data (pd.DataFrame, optional): Raw training data for quantile/pergene_zscore methods.
+        scaling_method (str): 'simple' (no double normalization) or 'double' (old method). Default 'simple'.
 
     Returns:
         tuple: (X_labeled, y_labeled, cell_ids_labeled)
@@ -1385,18 +1042,8 @@ def load_reh_or_sup_benchmark(scaler, reh_sup="sup", is_old_model=False, scaling
         X_labeled = scaling_benchmark(X_labeled, scaler)
     elif scaling_method == 'triple':
         X_labeled = scaling_benchmark_triple(X_labeled, scaler)
-    elif scaling_method == 'quantile':
-        if training_data is None:
-            raise ValueError("training_data is required for 'quantile' scaling method")
-        X_labeled = scaling_benchmark_quantile(X_labeled, scaler, training_data)
-    elif scaling_method == 'pergene_zscore':
-        if training_data is None:
-            raise ValueError("training_data is required for 'pergene_zscore' scaling method")
-        X_labeled = scaling_benchmark_pergene_zscore(X_labeled, scaler, training_data)
-    elif scaling_method == 'rank':
-        X_labeled = scaling_benchmark_rank(X_labeled, scaler)
     else:
-        raise ValueError(f"Invalid scaling_method: {scaling_method}. Use 'simple', 'double', 'triple', 'quantile', 'pergene_zscore', or 'rank'.")
+        raise ValueError(f"Invalid scaling_method: {scaling_method}. Use 'simple', 'double', or 'triple'.")
 
     # Ensure no NaN values (both old and new models)
     if X_labeled.isna().any().any():
@@ -1461,7 +1108,7 @@ def load_reh_or_sup_benchmark(scaler, reh_sup="sup", is_old_model=False, scaling
 #     return benchmark_features, benchmark_labels, benchmark_cell_ids
 
 # NEW VERSION - Loads from separate expression and labels files
-def load_gse146773(scaler, check_feature=False, is_old_model=False, scaling_method='simple', training_data=None):
+def load_gse146773(scaler, check_feature=False, is_old_model=False, scaling_method='simple'):
     """
     Loads and preprocesses the GSE146773 benchmark data from preprocessed files.
 
@@ -1474,8 +1121,7 @@ def load_gse146773(scaler, check_feature=False, is_old_model=False, scaling_meth
         scaler: Fitted scaler object.
         check_feature (bool): Whether to check feature overlap.
         is_old_model (bool): If True, skip capitalization (for old models). Default False.
-        scaling_method (str): Scaling method - 'simple', 'double', 'triple', 'quantile', or 'pergene_zscore'.
-        training_data (pd.DataFrame, optional): Raw training data for quantile/pergene_zscore methods.
+        scaling_method (str): 'simple' (no double normalization) or 'double' (old method). Default 'simple'.
 
     Returns:
         tuple: (benchmark_features, benchmark_labels, benchmark_cell_ids)
@@ -1524,7 +1170,7 @@ def load_gse146773(scaler, check_feature=False, is_old_model=False, scaling_meth
 
     # Preprocess the benchmark data
     benchmark_features, benchmark_labels, benchmark_cell_ids = data_preprocess_GSE(
-        data_gse_benchmark, scaler, "GSE146773", check_feature, is_old_model, scaling_method, training_data=training_data
+        data_gse_benchmark, scaler, "GSE146773", check_feature, is_old_model, scaling_method
     )
 
     return benchmark_features, benchmark_labels, benchmark_cell_ids
@@ -1595,7 +1241,7 @@ def load_gse146773(scaler, check_feature=False, is_old_model=False, scaling_meth
 #     return benchmark_features, benchmark_labels, benchmark_cell_ids
 
 # NEW VERSION - Loads from separate expression and labels files (with fallback to combined file)
-def load_gse64016(scaler, check_feature=False, is_old_model=False, scaling_method='simple', training_data=None):
+def load_gse64016(scaler, check_feature=False, is_old_model=False, scaling_method='simple'):
     """
     Loads and preprocesses the GSE64016 benchmark data from preprocessed files.
 
@@ -1609,8 +1255,7 @@ def load_gse64016(scaler, check_feature=False, is_old_model=False, scaling_metho
         scaler: Fitted scaler object.
         check_feature (bool): Whether to check feature overlap.
         is_old_model (bool): If True, skip capitalization (for old models). Default False.
-        scaling_method (str): Scaling method - 'simple', 'double', 'triple', 'quantile', or 'pergene_zscore'.
-        training_data (pd.DataFrame, optional): Raw training data for quantile/pergene_zscore methods.
+        scaling_method (str): 'simple' (no double normalization) or 'double' (old method). Default 'simple'.
 
     Returns:
         tuple: (benchmark_features, benchmark_labels, benchmark_cell_ids)
@@ -1684,7 +1329,7 @@ def load_gse64016(scaler, check_feature=False, is_old_model=False, scaling_metho
 
     # Preprocess the benchmark data
     benchmark_features, benchmark_labels, benchmark_cell_ids = data_preprocess_GSE(
-        data_gse_benchmark, scaler, "GSE64016", check_feature, is_old_model, scaling_method, training_data=training_data
+        data_gse_benchmark, scaler, "GSE64016", check_feature, is_old_model, scaling_method
     )
 
     return benchmark_features, benchmark_labels, benchmark_cell_ids
@@ -1811,7 +1456,7 @@ def load_gse64016(scaler, check_feature=False, is_old_model=False, scaling_metho
 #     return benchmark_features, benchmark_labels, benchmark_cell_ids
 
 # NEW VERSION - Loads from separate expression and labels files
-def load_buettner_mesc(scaler, check_feature=False, is_old_model=False, scaling_method='simple', training_data=None):
+def load_buettner_mesc(scaler, check_feature=False, is_old_model=False, scaling_method='simple'):
     """
     Loads and preprocesses the Buettner mESC benchmark data from preprocessed files.
 
@@ -1825,8 +1470,7 @@ def load_buettner_mesc(scaler, check_feature=False, is_old_model=False, scaling_
         scaler: Fitted scaler object.
         check_feature (bool): Whether to check feature overlap.
         is_old_model (bool): If True, capitalize + mean imputation for missing genes. Default False.
-        scaling_method (str): Scaling method - 'simple', 'double', 'triple', 'quantile', or 'pergene_zscore'.
-        training_data (pd.DataFrame, optional): Raw training data for quantile/pergene_zscore methods.
+        scaling_method (str): 'simple' (no double normalization) or 'double' (old method). Default 'simple'.
 
     Returns:
         tuple: (benchmark_features, benchmark_labels, benchmark_cell_ids)
@@ -1921,24 +1565,14 @@ def load_buettner_mesc(scaler, check_feature=False, is_old_model=False, scaling_
             benchmark_features = scaling_benchmark(X_labeled, scaler)
         elif scaling_method == 'triple':
             benchmark_features = scaling_benchmark_triple(X_labeled, scaler)
-        elif scaling_method == 'quantile':
-            if training_data is None:
-                raise ValueError("training_data is required for 'quantile' scaling method")
-            benchmark_features = scaling_benchmark_quantile(X_labeled, scaler, training_data)
-        elif scaling_method == 'pergene_zscore':
-            if training_data is None:
-                raise ValueError("training_data is required for 'pergene_zscore' scaling method")
-            benchmark_features = scaling_benchmark_pergene_zscore(X_labeled, scaler, training_data)
-        elif scaling_method == 'rank':
-            benchmark_features = scaling_benchmark_rank(X_labeled, scaler)
         else:
-            raise ValueError(f"Invalid scaling_method: {scaling_method}. Use 'simple', 'double', 'triple', 'quantile', 'pergene_zscore', or 'rank'.")
+            raise ValueError(f"Invalid scaling_method: {scaling_method}. Use 'simple', 'double', or 'triple'.")
         benchmark_labels = y_labeled
         benchmark_cell_ids = cell_ids_labeled
     else:
         # New models: use standard preprocessing
         benchmark_features, benchmark_labels, benchmark_cell_ids = data_preprocess_GSE(
-            data_buettner_benchmark, scaler, "Buettner_mESC", check_feature, is_old_model, scaling_method, training_data=training_data
+            data_buettner_benchmark, scaler, "Buettner_mESC", check_feature, is_old_model, scaling_method
         )
 
     # Ensure no NaN values (both old and new models)

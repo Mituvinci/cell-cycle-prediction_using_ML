@@ -16,6 +16,7 @@ Usage:
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+from matplotlib.gridspec import GridSpec
 import numpy as np
 import os
 import argparse
@@ -38,11 +39,11 @@ plt.rcParams['savefig.dpi'] = 600
 
 BASE_DIR = "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction"
 
-# Ground truth files
+# Ground truth files (updated to use new preprocessed benchmark labels)
 GROUND_TRUTH = {
-    'gse146773': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/GSE146773_seurat_normalized_gene_expression.csv",
-    'gse64016': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/GSE64016_seurat_normalized_gene_expression.csv",
-    'buettner_mesc': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/reassigned_predictions_buettner/buettner_mESC/seurat_reassigned.csv"
+    'gse146773': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/benchmarks_preprocessed/GSE146773/GSE146773_labels.csv",
+    'gse64016': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/benchmarks_preprocessed/GSE64016/GSE64016_labels.csv",
+    'buettner_mesc': "/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/data/benchmarks_preprocessed/Buettner_mESC/Buettner_mESC_labels.csv"
 }
 
 # Existing tool predictions
@@ -106,18 +107,14 @@ def load_ground_truth(benchmark):
 
     # Standardize column names based on benchmark
     if benchmark == 'gse146773':
-        df = df.rename(columns={'paper_phase': 'phase', 'cell': 'CellID'})
+        # Format: barcodes, paper_phase
+        df = df.rename(columns={'barcodes': 'CellID', 'paper_phase': 'phase'})
     elif benchmark == 'gse64016':
-        df = df.rename(columns={'Labeled': 'phase'})
-        # Use index as CellID if no explicit column
-        if 'CellID' not in df.columns:
-            df['CellID'] = df.iloc[:, 0]  # First column is usually cell ID
+        # Format: barcodes, Labeled
+        df = df.rename(columns={'barcodes': 'CellID', 'Labeled': 'phase'})
     elif benchmark == 'buettner_mesc':
-        # Buettner file has GroundTruth column
-        df = df.rename(columns={'GroundTruth': 'phase'})
-        # Ensure CellID column exists
-        if 'CellID' not in df.columns and 'Cell_ID' in df.columns:
-            df = df.rename(columns={'Cell_ID': 'CellID'})
+        # Format: CellID, Predicted (Predicted is actually ground truth here)
+        df = df.rename(columns={'Predicted': 'phase'})
 
     # Normalize phase labels
     if 'phase' in df.columns:
@@ -274,13 +271,38 @@ def load_model_accuracies(benchmark):
     return model_acc
 
 
-def generate_barplot(all_accuracies, output_dir, training_dataset):
+def generate_barplot(all_accuracies, output_dir, training_dataset, include_sup=False):
     """Generate bar plot comparing tools and models."""
 
     benchmarks = ['gse146773', 'gse64016', 'buettner_mesc']
-    benchmark_labels = ['(a) GSE146773', '(b) GSE64016', '(c) Buettner mESC']
+    benchmark_labels = ['(a) GSE146773', '(b) GSE64016', '(c) E-MTAB-2805 (Buettner mESC)']
 
-    fig, axes = plt.subplots(3, 1, figsize=(14, 12))
+    if include_sup:
+        benchmarks.insert(0, 'sup')
+        benchmark_labels.insert(0, '(a) SUP-B15')
+        # Re-label others
+        benchmark_labels[1] = '(b) GSE146773'
+        benchmark_labels[2] = '(c) GSE64016'
+        benchmark_labels[3] = '(d) E-MTAB-2805 (Buettner mESC)'
+
+    # Create figure with TWO GridSpec sections: legend area + plots area
+    fig = plt.figure(figsize=(14, 3.2 * len(benchmarks)))
+
+    # Top section: legend only (moved higher to prevent overlap)
+    gs_legend = GridSpec(1, 1, top=0.99, bottom=0.96, figure=fig)
+    legend_ax = fig.add_subplot(gs_legend[0])
+    legend_ax.axis('off')
+
+    # Bottom section: subplots with moderate spacing
+    gs_plots = GridSpec(len(benchmarks), 1,
+                        hspace=0.75,
+                        top=0.90, bottom=0.08,  # Moved down from 0.94 to 0.90 for legend clearance
+                        figure=fig)
+
+    # Create subplot axes from plots GridSpec
+    axes = []
+    for i in range(len(benchmarks)):
+        axes.append(fig.add_subplot(gs_plots[i]))
 
     for idx, (benchmark, ax) in enumerate(zip(benchmarks, axes)):
         data = all_accuracies.get(benchmark, {})
@@ -331,7 +353,7 @@ def generate_barplot(all_accuracies, output_dir, training_dataset):
         ax.set_xticks(x)
         ax.set_xticklabels(all_names, rotation=45, ha='right', fontsize=12)
         ax.set_title(benchmark_labels[idx], fontsize=16, fontweight='bold', loc='left')
-        ax.set_ylim(0, 100)
+        ax.set_ylim(0, 85)
         ax.grid(axis='y', alpha=0.3, linestyle='--')
         ax.set_axisbelow(True)
 
@@ -347,15 +369,18 @@ def generate_barplot(all_accuracies, output_dir, training_dataset):
         mpatches.Patch(color='#808080', label='Existing Tools', edgecolor='black', linewidth=1.5),
         mpatches.Patch(color='#4472C4', label='Deep Learning Models', edgecolor='black', linewidth=1.5),
         mpatches.Patch(color='#FFA500', label='Traditional ML Models', edgecolor='black', linewidth=1.5),
-        mpatches.Patch(color='#9933CC', label='Ensemble Models', edgecolor='black', linewidth=1.5)
+        mpatches.Patch(color='#9933CC', label='Ensemble Models (DL)', edgecolor='black', linewidth=1.5)
     ]
 
-    # Add horizontal legend at the bottom
-    fig.legend(handles=legend_handles, loc='lower center', ncol=4,
-              fontsize=12, frameon=True, edgecolor='black',
-              bbox_to_anchor=(0.5, -0.05))
-
-    plt.tight_layout()
+    # Place legend in dedicated top row
+    legend_ax.legend(
+        handles=legend_handles,
+        loc='center',
+        ncol=4,
+        fontsize=12,
+        frameon=True,
+        edgecolor='black'
+    )
 
     # Save outputs
     output_base = os.path.join(output_dir, f'tool_comparison_barplot_3benchmarks_{training_dataset}')
@@ -381,6 +406,7 @@ def main():
     parser = argparse.ArgumentParser(description='Generate tool comparison bar plot')
     parser.add_argument('--training-dataset', '-t', required=True,
                        help='Training dataset name (e.g., nft_reh, hpsc, pbmc, mouse_brain)')
+    parser.add_argument('--sup', action='store_true', help='Include SUP-B15 benchmark (excluded by default)')
     args = parser.parse_args()
 
     # Set MODEL_RESULTS paths based on training dataset
@@ -392,11 +418,17 @@ def main():
     print("="*70)
     print(f"Training dataset: {args.training_dataset}")
     print(f"Model results directory: 5_visualization/heatmap_barplot_lineplots_csv/{args.training_dataset}/")
+    print(f"Include SUP: {args.sup}")
 
     all_accuracies = {}
 
     # Process each benchmark
-    for benchmark in ['gse146773', 'gse64016', 'buettner_mesc']:
+    benchmarks = ['gse146773', 'gse64016', 'buettner_mesc']
+    if args.sup:
+        benchmarks.insert(0, 'sup')
+        print("\nIncluding SUP-B15 benchmark")
+
+    for benchmark in benchmarks:
         print(f"\n{'='*70}")
         print(f"Processing: {benchmark.upper()}")
         print(f"{'='*70}")
@@ -472,7 +504,7 @@ def main():
     print("GENERATING BAR PLOT")
     print("="*70)
 
-    generate_barplot(all_accuracies, output_dir, args.training_dataset)
+    generate_barplot(all_accuracies, output_dir, args.training_dataset, include_sup=args.sup)
 
     print(f"\nSaved plots to: {output_dir}/tool_comparison_barplot_3benchmarks_{args.training_dataset}.*")
     print("\n" + "="*70)

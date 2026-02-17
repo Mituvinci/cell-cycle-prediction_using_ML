@@ -118,11 +118,14 @@ def sort_models_by_order(df):
     return df
 
 def fix_metric_scale(value):
-    """Fix MCC/Kappa scale if needed (should be -1 to +1, not 0-100)."""
+    """
+    MCC/Kappa are stored in -100 to +100 scale (multiplied by 100 in evaluation code).
+    Keep them as-is for plotting (don't convert back to -1 to 1).
+    """
     if pd.isna(value):
         return value
-    if value > 1.5:
-        return value / 100.0
+    # Values are already in -100 to +100 scale from evaluation code
+    # Just return as-is
     return value
 
 # Compact display names for heatmap
@@ -266,14 +269,12 @@ def extract_best_models_for_benchmark(df, benchmark, base_search_dir=None):
 
             if prec_col in best_model.index:
                 prec_val = best_model[prec_col]
-                if pd.notna(prec_val) and is_dl_model:
-                    prec_val = prec_val * 100
+                # Values are already in % scale (0-100) from evaluation code
                 model_data[f'precision_{phase}'] = round(prec_val, 2) if pd.notna(prec_val) else None
 
             if rec_col in best_model.index:
                 rec_val = best_model[rec_col]
-                if pd.notna(rec_val) and is_dl_model:
-                    rec_val = rec_val * 100
+                # Values are already in % scale (0-100) from evaluation code
                 model_data[f'recall_{phase}'] = round(rec_val, 2) if pd.notna(rec_val) else None
 
         best_models.append(model_data)
@@ -284,11 +285,8 @@ def extract_best_models_for_benchmark(df, benchmark, base_search_dir=None):
             if col.startswith(f'{benchmark}_'):
                 clean_col = col.replace(f'{benchmark}_', '')
                 value = best_model[col]
-
-                if is_dl_model and any(clean_col.startswith(prefix) for prefix in ['precision_', 'recall_']):
-                    if pd.notna(value):
-                        value = value * 100
-
+                # Values are already in % scale (0-100) from evaluation code
+                # No need to multiply by 100 again
                 full_data[clean_col] = value
         best_models_full.append(full_data)
 
@@ -367,8 +365,8 @@ def auto_detect_top3_models(df_all, training_dataset, base_search_dir):
                 print(f"  WARNING: No models found for {arch}")
                 continue
 
-            # Find best fold by average accuracy across all benchmarks
-            benchmarks = [ 'gse146773', 'gse64016', 'buettner_mesc']
+            # Find best fold by average accuracy across all benchmarks (exclude SUP from auto-detection)
+            benchmarks = ['gse146773', 'gse64016', 'buettner_mesc']
             arch_models['avg_accuracy'] = arch_models[[f'{b}_accuracy' for b in benchmarks]].mean(axis=1)
 
             best_idx = arch_models['avg_accuracy'].idxmax()
@@ -388,8 +386,8 @@ def auto_detect_top3_models(df_all, training_dataset, base_search_dir):
         # For other datasets: Use top 3 DL models by average accuracy
         print("  Using top 3 DL models by average accuracy across all benchmarks")
 
-        # Calculate average accuracy across all benchmarks
-        benchmarks = [ 'gse146773', 'gse64016', 'buettner_mesc']
+        # Calculate average accuracy across all benchmarks (exclude SUP from auto-detection)
+        benchmarks = ['gse146773', 'gse64016', 'buettner_mesc']
         df_dl['avg_accuracy'] = df_dl[[f'{b}_accuracy' for b in benchmarks]].mean(axis=1)
 
         # Exclude traditional ML models
@@ -424,7 +422,7 @@ def run_ensemble_fusion(top3_info, benchmark):
 
     model_paths = [info[0] for info in top3_info]
     benchmark_map = {
-       
+        'sup': 'SUP',
         'gse146773': 'GSE146773',
         'gse64016': 'GSE64016',
         'buettner_mesc': 'Buettner_mESC'
@@ -518,7 +516,7 @@ def generate_heatmap(all_benchmark_data, output_dir):
     print("GENERATING PRECISION/RECALL HEATMAP")
     print("="*70)
 
-    # Prepare data
+    # Prepare data (SUP excluded from heatmap - always)
     benchmarks = ['gse146773', 'gse64016', 'buettner_mesc']
     phases = ['g1', 'g2m', 's']
     phase_labels = ['G1', 'G2M', 'S']
@@ -527,7 +525,7 @@ def generate_heatmap(all_benchmark_data, output_dir):
     benchmark_display_names = {
         'gse146773': 'GSE146773',
         'gse64016': 'GSE64016',
-        'buettner_mesc': 'Buettner mESC'
+        'buettner_mesc': 'E-MTAB-2805'
     }
 
     # Get model order from first benchmark
@@ -578,7 +576,7 @@ def generate_heatmap(all_benchmark_data, output_dir):
     heatmap_data = np.column_stack(all_columns)
 
     # Create heatmap
-    fig, ax = plt.subplots(figsize=(16, 8))
+    fig, ax = plt.subplots(figsize=(11, 5.0))
 
     sns.heatmap(heatmap_data,
                 cmap='Blues',
@@ -676,10 +674,13 @@ def main():
     parser = argparse.ArgumentParser(description='Generate all benchmark results + heatmap (FIXED Top-3 models)')
     parser.add_argument('--input', '-i', required=True, help='Path to consolidated CSV file')
     parser.add_argument('--model-dir', '-m', default=None, help='Base directory for model files')
+    parser.add_argument('--output-name', '-o', default=None,
+                        help='Output folder name (e.g., nft_reh_robust_result). If not provided, auto-detected from CSV prefix_name')
     parser.add_argument('--fixed-models', '-f', nargs=3, default=None,
                         help='Fixed model prefix names (3 required, e.g., simpledense_NFT_reh_fld_2 enhancedense_NFT_reh_fld_3 fe_NFT_reh_fld_5)')
     parser.add_argument('--skip-ensemble', action='store_true', help='Skip ensemble fusion')
     parser.add_argument('--skip-heatmap', action='store_true', help='Skip heatmap generation')
+    parser.add_argument('--sup', action='store_true', help='Include SUP-B15 benchmark (excluded by default)')
 
     args = parser.parse_args()
 
@@ -692,21 +693,29 @@ def main():
     print("="*70)
     print(f"\nInput: {args.input}")
     print(f"Model directory: {args.model_dir}")
+    print(f"Output name: {args.output_name if args.output_name else 'Auto-detect from CSV'}")
     print(f"Fixed models: {args.fixed_models if args.fixed_models else 'Auto-detect'}")
     print(f"Skip ensemble: {args.skip_ensemble}")
     print(f"Skip heatmap: {args.skip_heatmap}")
+    print(f"Include SUP: {args.sup}")
 
     # Load consolidated data
     print("\nLoading consolidated data...")
     df_all = pd.read_csv(args.input)
     print(f"  Total models: {len(df_all)}")
 
-    # Extract training dataset name
-    training_dataset = extract_training_dataset(df_all['prefix_name'].iloc[0])
-    if training_dataset is None:
-        print("ERROR: Could not extract training dataset name from prefix_name")
-        sys.exit(1)
-    print(f"  Detected training dataset: {training_dataset}")
+    # Determine training dataset name
+    if args.output_name:
+        # User specified output name explicitly
+        training_dataset = args.output_name
+        print(f"  Using user-specified output name: {training_dataset}")
+    else:
+        # Auto-detect from prefix_name
+        training_dataset = extract_training_dataset(df_all['prefix_name'].iloc[0])
+        if training_dataset is None:
+            print("ERROR: Could not extract training dataset name from prefix_name")
+            sys.exit(1)
+        print(f"  Auto-detected training dataset: {training_dataset}")
 
     # Find FIXED Top-3 models (ONCE for ALL benchmarks)
     top3_info = None
@@ -726,7 +735,10 @@ def main():
                 print(f"  {i}. {name} ({prefix})")
 
     # Process each benchmark
-    benchmarks = [ 'gse146773', 'gse64016', 'buettner_mesc']
+    benchmarks = ['gse146773', 'gse64016', 'buettner_mesc']
+    if args.sup:
+        benchmarks.insert(0, 'sup')
+        print("\nIncluding SUP-B15 benchmark")
     all_benchmark_data = {}
 
     output_dir = f"/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/5_visualization/heatmap_barplot_lineplots_csv/{training_dataset}"
@@ -788,13 +800,18 @@ def main():
             print(f"\nCalling: {plot_script}")
             print(f"  Input directory: {output_dir}")
             print(f"  Training dataset: {training_dataset}")
+            print(f"  Include SUP: {args.sup}")
 
-            subprocess.run([
+            cmd = [
                 sys.executable,
                 plot_script,
                 '--input-dir', output_dir,
                 '--training-dataset', training_dataset
-            ], check=True)
+            ]
+            if args.sup:
+                cmd.append('--sup')
+
+            subprocess.run(cmd, check=True)
 
             print("  Line plots generated successfully!")
         except subprocess.CalledProcessError as e:
@@ -804,12 +821,48 @@ def main():
     else:
         print(f"  WARNING: Plot script not found: {plot_script}")
 
+    # Automatically call tool comparison bar plot script (5_plot_tool_comparison_barplot.py)
     print("\n" + "="*70)
-    print("DONE!")
+    print("GENERATING TOOL COMPARISON BAR PLOT")
+    print("="*70)
+
+    barplot_script = os.path.join(os.path.dirname(__file__), '5_plot_tool_comparison_barplot.py')
+    if os.path.exists(barplot_script):
+        try:
+            print(f"\nCalling: {barplot_script}")
+            print(f"  Result folder: {training_dataset}")
+            print(f"  Include SUP: {args.sup}")
+
+            cmd = [
+                sys.executable,
+                barplot_script,
+                '--training-dataset', training_dataset
+            ]
+            if args.sup:
+                cmd.append('--sup')
+
+            subprocess.run(cmd, check=True)
+
+            print("  Tool comparison bar plot generated successfully!")
+        except subprocess.CalledProcessError as e:
+            print(f"  WARNING: Bar plot generation failed: {e}")
+        except Exception as e:
+            print(f"  WARNING: Could not call bar plot script: {e}")
+    else:
+        print(f"  WARNING: Bar plot script not found: {barplot_script}")
+
+    print("\n" + "="*70)
+    print("ALL DONE!")
     print("="*70)
     print(f"\nAll results saved to: {output_dir}/")
-    print("\nNOTE: Run 5_plot_tool_comparison_barplot.py separately to compare with existing tools:")
-    print(f"  python 5_plot_tool_comparison_barplot.py --training-dataset {training_dataset}")
+    print(f"\nGenerated files:")
+    if args.sup:
+        print(f"  - Benchmark CSVs: sup_results_{training_dataset}.csv, gse146773_results_{training_dataset}.csv, etc.")
+    else:
+        print(f"  - Benchmark CSVs: gse146773_results_{training_dataset}.csv, gse64016_results_{training_dataset}.csv, buettner_mesc_results_{training_dataset}.csv")
+    print(f"  - Heatmap: precision_recall_heatmap_3benchmarks.pdf/png/jpg")
+    print(f"  - Line plots: benchmark_lineplots_*.pdf/png/jpg")
+    print(f"  - Bar plot: tool_comparison_barplot_3benchmarks_{training_dataset}.pdf/png/jpg")
 
 
 if __name__ == "__main__":

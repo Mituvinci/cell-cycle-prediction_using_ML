@@ -74,7 +74,7 @@ def extract_classwise_metrics(report_df, label_encoder, benchmark_prefix=""):
     return classwise_metrics
 
 
-def evaluate_on_benchmark(model, scaler, label_encoder, selected_features, model_dir, dataset_name, is_tml=False, scaling_method='simple'):
+def evaluate_on_benchmark(model, scaler, label_encoder, selected_features, model_dir, dataset_name, is_tml=False, scaling_method='simple', training_data=None):
     """
     Evaluate model on a single benchmark dataset.
 
@@ -86,7 +86,8 @@ def evaluate_on_benchmark(model, scaler, label_encoder, selected_features, model
         model_dir: Model directory path
         dataset_name: "SUP", "GSE146773", "GSE64016", or "Buettner_mESC"
         is_tml: Whether model is traditional ML
-        scaling_method: 'simple' (no double normalization) or 'double' (old method)
+        scaling_method: 'simple', 'double', 'triple', 'quantile', or 'pergene_zscore'
+        training_data: Raw training data DataFrame (required for quantile/pergene_zscore)
 
     Returns:
         dict: Evaluation metrics (overall + class-wise)
@@ -103,13 +104,13 @@ def evaluate_on_benchmark(model, scaler, label_encoder, selected_features, model
 
     # Load benchmark data
     if dataset_name == "SUP":
-        benchmark_features, benchmark_labels, _ = load_reh_or_sup_benchmark(scaler, reh_sup="sup", is_old_model=is_old_model, scaling_method=scaling_method)
+        benchmark_features, benchmark_labels, _ = load_reh_or_sup_benchmark(scaler, reh_sup="sup", is_old_model=is_old_model, scaling_method=scaling_method, training_data=training_data)
     elif dataset_name == "GSE146773":
-        benchmark_features, benchmark_labels, _ = load_gse146773(scaler, False, is_old_model=is_old_model, scaling_method=scaling_method)
+        benchmark_features, benchmark_labels, _ = load_gse146773(scaler, False, is_old_model=is_old_model, scaling_method=scaling_method, training_data=training_data)
     elif dataset_name == "GSE64016":
-        benchmark_features, benchmark_labels, _ = load_gse64016(scaler, False, is_old_model=is_old_model, scaling_method=scaling_method)
+        benchmark_features, benchmark_labels, _ = load_gse64016(scaler, False, is_old_model=is_old_model, scaling_method=scaling_method, training_data=training_data)
     elif dataset_name == "Buettner_mESC":
-        benchmark_features, benchmark_labels, _ = load_buettner_mesc(scaler, False, is_old_model=is_old_model, scaling_method=scaling_method)
+        benchmark_features, benchmark_labels, _ = load_buettner_mesc(scaler, False, is_old_model=is_old_model, scaling_method=scaling_method, training_data=training_data)
     else:
         raise ValueError(f"Invalid dataset name: {dataset_name}")
 
@@ -288,9 +289,9 @@ def main():
     parser.add_argument(
         '--scaling_method',
         type=str,
-        choices=['simple', 'double'],
+        choices=['simple', 'double', 'triple', 'quantile', 'pergene_zscore', 'rank'],
         default='simple',
-        help='Scaling method for benchmarks: simple (correct - no double normalization) or double (old method with double normalization). Default: simple'
+        help='Scaling method for benchmarks: simple (1x scaling), double (2x scaling), triple (3x scaling), quantile (quantile normalization to training distribution), pergene_zscore (per-gene z-score matching to training distribution), rank (per-cell rank transformation - use with rank-trained models). Default: simple'
     )
 
     args = parser.parse_args()
@@ -326,6 +327,13 @@ def main():
     print(f"Model loaded successfully ({model_category})")
     print(f"{'='*80}\n")
 
+    # Load training data if quantile or pergene_zscore scaling is requested
+    training_data = None
+    if args.scaling_method in ['quantile', 'pergene_zscore']:
+        from utils.data_utils import get_training_data_path, load_training_data_for_scaling
+        training_data_path = get_training_data_path(args.model_path)
+        training_data = load_training_data_for_scaling(training_data_path, selected_features)
+
     # Evaluate on selected benchmarks and collect results in WIDE format
     wide_results = {'prefix_name': model_name}
 
@@ -336,7 +344,8 @@ def main():
 
         metrics = evaluate_on_benchmark(
             model, scaler, label_encoder, selected_features,
-            model_dir, dataset_name, is_tml=is_tml, scaling_method=args.scaling_method
+            model_dir, dataset_name, is_tml=is_tml, scaling_method=args.scaling_method,
+            training_data=training_data
         )
 
         # Add all metrics with benchmark prefix to wide_results
@@ -447,7 +456,7 @@ def main():
         if accuracy_key in wide_results:
             print(f"{args.custom_benchmark_name:15s}: {wide_results[accuracy_key]:6.2f}%")
 
-    print(f"\n✅ Results saved to: {args.output}")
+    print(f"\nResults saved to: {args.output}")
     print(f"{'='*80}\n")
 
 
