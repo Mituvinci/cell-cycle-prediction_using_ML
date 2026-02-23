@@ -430,11 +430,8 @@ python 5_visualization/5_plot_tool_comparison_barplot.py
 If you use this code or pipeline, please cite:
 
 ```bibtex
-@inproceedings{akhter2025cellcycle,
-  title={Deep Learning Models for Cell Cycle Phase Prediction from Single-Cell RNA Sequencing Data},
-  author={Halima Akhter, Donald Adjeroh, Gangqing Hu},
-  booktitle={AAAI Workshop 2026},
-  year={2025}
+@inproceedings{anonymous,
+  title={Deep Learning Models for Cell Cycle Phase Prediction from Single-Cell RNA Sequencing Data}
 }
 ```
 
