@@ -289,9 +289,9 @@ def main():
     parser.add_argument(
         '--scaling_method',
         type=str,
-        choices=['simple', 'double', 'triple', 'quantile', 'pergene_zscore', 'rank'],
-        default='simple',
-        help='Scaling method for benchmarks: simple (1x scaling), double (2x scaling), triple (3x scaling), quantile (quantile normalization to training distribution), pergene_zscore (per-gene z-score matching to training distribution), rank (per-cell rank transformation - use with rank-trained models). Default: simple'
+        choices=['simple', 'double', 'quantile', 'pergene_zscore', 'rank'],
+        default='double',
+        help='Scaling method for benchmarks: simple (1x scaling), double (2x scaling), quantile (quantile normalization to training distribution), pergene_zscore (per-gene z-score matching to training distribution), rank (per-cell rank transformation - use with rank-trained models). Default: double'
     )
 
     args = parser.parse_args()
