@@ -1,144 +1,74 @@
 # Cell Cycle Phase Prediction Pipeline
-## Deep Learning Models for Single-Cell RNA-Seq Data
+## Deep Learning and Traditional ML Models for Single-Cell RNA-Seq Data
 
-> **Status:** Phase G - Enhanced Evaluation with Class-Wise Metrics Complete
-> **Last Updated:** 2025-12-02
-> **Training:** 12/16 models complete (75%) | 4 models still running
+**Status:** Complete
+**Last Updated:** 2026-02-23
 
 ---
 
 ## Overview
 
-This repository contains a **modular, reproducible pipeline** for predicting cell cycle phases (G1, S, G2M) from single-cell RNA-seq data using deep learning and traditional machine learning models.
+This repository provides a complete, reproducible pipeline for predicting cell cycle phases (G1, S, G2M) from single-cell RNA-seq (scRNA-seq) data using deep learning (DL) and traditional machine learning (TML) models.
+
+The pipeline covers five stages: data preprocessing, consensus phase labeling, model training, benchmark evaluation, and publication visualization. All training was performed on an HPC cluster (DOLLY SODS, 155 GPUs) using SLURM job scheduling.
 
 ### Key Features
-- **Flexible Consensus Labeling**: Create training labels from ANY combination of prediction tools
-- **Multiple Models**: DNN3 (top performer), DNN5, CNN, Hybrid CNN, Feature Embedding, and traditional ML
-- **Custom Data Support**: Train and evaluate on your own datasets
-- **Class Balancing**: SMOTE/ADASYN oversampling + undersampling
-- **Focal Loss**: Addresses class imbalance during training
-- **Model Interpretability**: SHAP analysis for biological validation (both DL and TML)
-- **Benchmark Validation**: Evaluated on FUCCI-labeled datasets (GSE146773, GSE64016, Buettner_mESC)
-- **Species-Independent Gene Naming**: Automatic gene name capitalization for cross-species model compatibility
 
----
-
-## Species-Independent Gene Naming
-
-**NEW**: The pipeline now automatically capitalizes all gene names to enable cross-species model training and evaluation.
-
-### How It Works
-- **Automatic capitalization**: All gene names converted to first letter uppercase, rest lowercase
-- **Mouse genes**: `Gnai3, Pbsn, Cdc45, H19`
-- **Human genes**: `Gapdh, Actb, Tp53, Myc`
-- **Benchmark data**: Expression and ground truth labels stored separately
-
-### Benefits
-✅ **Train on human, evaluate on mouse**: Models trained on REH/SUP (human) can be evaluated on Buettner_mESC (mouse)
-✅ **Train on mouse, evaluate on human**: Works in reverse too!
-✅ **No gene name mismatches**: Consistent feature naming across species
-✅ **Automatic handling**: All data loading functions apply capitalization
-
-### Example: Cross-Species Evaluation
-```bash
-# Train model on human REH data
-python 2_model_training/train_deep_learning.py \
-  --model simpledense \
-  --dataset reh \
-  --output models/human_model/
-
-# Evaluate on mouse Buettner_mESC benchmark (works seamlessly!)
-python 3_evaluation/evaluate_models.py \
-  --model_path models/human_model/simpledense_NFT_reh_fld_1.pt \
-  --benchmarks Buettner_mESC
-```
-
-### Data Preparation
-Before using Buettner_mESC benchmark, run:
-```bash
-# Clean benchmark data (remove embedded Phase column, capitalize genes)
-python utils/clean_buettner_benchmark.py
-
-# Test complete standardization pipeline
-bash test_data_standardization.sh
-```
-
-See `DATA_STANDARDIZATION_SUMMARY.md` for complete documentation.
-
----
-
-## Pre-computed Gene Lists
-
-Training uses pre-computed gene lists for feature intersection across training and benchmark datasets.
-
-### How It Works
-1. Gene lists are pre-computed and stored in `gene_lists/` directory
-2. Training scripts require `--gene-list` argument pointing to the gene list file
-3. All gene names are UPPERCASE for consistency
-
-### Usage
-```bash
-# Train on hPSC data with pre-computed gene list
-python 2_model_training/train_deep_learning.py \
-  --model simpledense \
-  --dataset hpsc \
-  --gene-list gene_lists/hpsc_3benchmark_sup.txt \
-  --trials 20 \
-  --cv 5 \
-  --output models/human_hpsc/simpledense/
-
-# Train on REH data
-python 2_model_training/train_deep_learning.py \
-  --model cnn \
-  --dataset reh \
-  --gene-list gene_lists/reh_3benchmark_sup.txt \
-  --trials 20 \
-  --cv 5 \
-  --output models/reh/cnn/
-```
-
-**Available datasets:**
-- `hpsc`: Human embryonic stem cells (GSE75748)
-- `reh`: Human REH leukemia cell line
-- `sup`: Human SUP-B15 leukemia cell line
-- `pbmc`: Human PBMCs
-- `mouse_brain`: Mouse brain cells
+- Consensus labeling from 4 existing tools (Seurat, Tricycle, Revelio, ccAFv2)
+- 6 deep learning architectures + 4 traditional ML models
+- Nested cross-validation with Optuna hyperparameter optimization
+- SMOTE + undersampling for class imbalance handling
+- Focal loss for deep learning models
+- Ensemble fusion (decision and score-level) from top-3 models
+- SHAP interpretability analysis
+- Cross-species evaluation (human trained, mouse evaluated and vice versa)
+- Automatic gene name format conversion across species
 
 ---
 
 ## Datasets
 
-### Training Data (Default)
-- **GSE75748 (hPSC/hESC)**: Human embryonic stem cell single-cell RNA-seq dataset containing 1,776 cells profiled across both snapshot progenitor states and a detailed temporal differentiation trajectory. This dataset captures strong cell-cycle activity and developmental transitions, making it highly suitable for training and evaluating deep-learning models for cell-cycle phase prediction.
-  - Download: [GSE75748](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE75748)
-- **Human PBMCs (10,194 cells)**: Human peripheral blood mononuclear cells (10x Chromium). Consensus labeling yields 2,431 cells (1,963 G1, 127 S, 341 G2M).
-  - Download: [10x Genomics PBMC Dataset](https://www.10xgenomics.com/datasets/pbm-cs-from-a-healthy-donor-whole-transcriptome-analysis-3-1-standard-4-0-0)
-- **REH and SUP-B15**: Human leukemia cell lines (10x Chromium Multiome)
-  - Download: [GSE293316](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE293316)
-- **10k Brain Cells from an E18 Mouse (v3 chemistry, 11,843 cells)**: Mouse scRNA 10x Chromium. Consensus labeling yields 5,524 cells (3,830 G1, 1,116 S, 578 G2M).
-  - Download: [10x Genomics](https://www.10xgenomics.com/datasets/10-k-brain-cells-from-an-e-18-mouse-v-3-chemistry-3-standard-3-0-0)
+### Training Datasets
 
-### Benchmark Data (Ground Truth)
-- **GSE146773**: Human U-2 OS cells with FUCCI reporter (Smart-seq2 platform)
-  - Download: [https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE146773](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE146773)
+| Dataset | Species | Platform | Cells (after labeling) | Source |
+|---------|---------|----------|------------------------|--------|
+| REH leukemia cell line | Human | 10x Chromium Multiome | ~3,000 | [GSE293316](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE293316) |
+| SUP-B15 leukemia cell line | Human | 10x Chromium Multiome | ~3,000 | [GSE293316](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE293316) |
+| Human PBMCs | Human | 10x Chromium | 2,431 (1,963 G1 / 127 S / 341 G2M) | [10x Genomics PBMC](https://www.10xgenomics.com/datasets/pbm-cs-from-a-healthy-donor-whole-transcriptome-analysis-3-1-standard-4-0-0) |
+| Mouse E18 Brain Cells | Mouse | 10x Chromium v3 | 5,524 (3,830 G1 / 1,116 S / 578 G2M) | [10x Genomics Mouse Brain](https://www.10xgenomics.com/datasets/10-k-brain-cells-from-an-e-18-mouse-v-3-chemistry-3-standard-3-0-0) |
+| GSE75748 (hPSC/hESC) | Human | Smart-seq2 | 1,776 | [GSE75748](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE75748) |
+| Nestorova (mouse HSC) | Mouse | Smart-seq2 | - | [GSE81682](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE81682) |
 
-- **GSE64016**: Human H1-Fucci hESCs (Fluidigm C1 platform)
-  - 247 H1-Fucci single cells sequenced (used to confirm cell cycle gene clusters)
-  - 213 H1 cells also available (used for Oscope evaluation)
-  - Normalized expected counts provided
-  - Download: [https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE64016](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE64016)
+### Benchmark Datasets (Ground Truth FUCCI or FACS labels)
 
-- **Buettner_mESC (E-MTAB-2805)**: Mouse embryonic stem cells (mESC-SMARTer protocol)
-  - Often referred to as mESC-SMARTer
-  - 288 single-cell RNA-seq profiles from mouse ESCs
-  - Cell cycle phases (G1, S, G2M) determined by Hoechst 33342 staining and FACS sorting
-  - Access via Bioconductor:
-    ```R
-    library(scRNAseq)
-    sce <- BuettnerESCData()
-    ```
-  - ArrayExpress: [https://www.ebi.ac.uk/arrayexpress/experiments/E-MTAB-2805/](https://www.ebi.ac.uk/arrayexpress/experiments/E-MTAB-2805/)
-  - **Citation**: Buettner, F., Natarajan, K. N., Casale, F. P., et al. *Computational analysis of cell-to-cell heterogeneity in single-cell RNA-sequencing data reveals hidden subpopulations of cells.* Nature Biotechnology 33, 155–160 (2015).
+| Dataset | Species | Platform | Cells | Source |
+|---------|---------|----------|-------|--------|
+| GSE146773 | Human | Smart-seq2 | ~1,100 | [GSE146773](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE146773) |
+| GSE64016 | Human | Fluidigm C1 | 247 | [GSE64016](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE64016) |
+| Buettner_mESC (E-MTAB-2805) | Mouse | SMARTer | 288 | [ArrayExpress E-MTAB-2805](https://www.ebi.ac.uk/arrayexpress/experiments/E-MTAB-2805/) |
+| SUP-B15 (internal) | Human | 10x Chromium Multiome | - | [GSE293316](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE293316) |
+
+**Buettner_mESC access via Bioconductor:**
+```R
+library(scRNAseq)
+sce <- BuettnerESCData()
+```
+
+**Citation for Buettner_mESC:** Buettner, F., Natarajan, K. N., Casale, F. P., et al. Computational analysis of cell-to-cell heterogeneity in single-cell RNA-sequencing data reveals hidden subpopulations of cells. Nature Biotechnology 33, 155-160 (2015).
+
+---
+
+## Gene Name Format Convention
+
+All new models (trained on the 7-dataset intersection of 6,066 genes) use **capitalized gene names** (first letter uppercase, rest lowercase).
+
+| Context | Format | Example |
+|---------|--------|---------|
+| Training data (new models) | Capitalized | `Actb`, `Gapdh`, `Tp53` |
+| Benchmark data (human: GSE146773, GSE64016, SUP) | UPPERCASE | `ACTB`, `GAPDH`, `TP53` |
+| Benchmark data (mouse: Buettner_mESC) | Capitalized | `Actb`, `Gapdh`, `Tp53` |
+
+**Automatic conversion:** The evaluation scripts (`3_evaluation/evaluate_models.py`) automatically detect the benchmark gene format and convert to match the training format via `match_scaler_feature_format()`. No manual conversion is needed.
 
 ---
 
@@ -146,674 +76,442 @@ python 2_model_training/train_deep_learning.py \
 
 ```
 cell_cycle_prediction/
-├── 1_consensus_labeling/         # Create consensus training labels
-│   ├── analyze/
-│   │   ├── create_contingency_flexible.py   # Compare tool predictions
-│   │   ├── generate_heatmap_flexible.py     # Obs/expect ratio heatmaps
-│   │   └── run_analysis_mouse_human.sh      # Master analysis script
-│   ├── assign/                              # Phase reassignment (TBD)
-│   ├── merge/
-│   │   └── merge_consensus.py               # Merge where ≥N tools agree
-│   └── WORKFLOW_MOUSE_HUMAN.md              # Detailed consensus workflow
-│
-├── 2_model_training/             # Model training modules
-│   ├── models/                   # Model architectures
-│   │   ├── dense_models.py       # SimpleDenseModel (DNN3), DeepDenseModel (DNN5)
-│   │   ├── cnn_models.py         # CNNModel
-│   │   └── hybrid_models.py      # HybridCNNDenseModel, FeatureEmbeddingModel
-│   ├── utils/                    # Training utilities
-│   │   ├── training_utils.py     # Focal loss, training, evaluation
-│   │   ├── data_utils.py         # Data loading, preprocessing, custom data
-│   │   ├── optuna_utils.py       # Hyperparameter optimization (DL)
-│   │   ├── optuna_tml.py         # Hyperparameter optimization (TML)
-│   │   ├── nested_cv.py          # Nested cross-validation
-│   │   └── io_utils.py           # Save/load utilities
-│   ├── train_deep_learning.py    # CLI for DL training
-│   └── train_traditional_ml.py   # CLI for TML training
-│
-├── 3_evaluation/                 # Evaluation scripts
-│   ├── model_loader.py           # Load trained models with artifacts
-│   ├── evaluate_models.py        # Benchmark evaluation
-│   └── ensemble_fusion.py        # Score/decision fusion
-│
-├── 4_interpretability/           # SHAP analysis
-│   └── run_shap_analysis.py      # SHAP for DL and TML models
-│
-├── 5_visualization/              # Visualization scripts
-│   └── advanced_plots.py         # Heatmaps, calibration curves
-│
-├── configs/                      # Configuration files
-│   ├── datasets.yaml             # Dataset paths and parameters
-│   ├── models/                   # Model configurations
-│   └── phase_mappings/           # Phase mapping rationales
-│
-├── data/                         # Data directories
-│   ├── marker_genes/             # Reference marker genes
-│   ├── raw/                      # Original data
-│   ├── processed/                # Preprocessed data
-│   └── predictions/              # Tool predictions
-│
-├── models/saved_models/          # Trained model weights (.pt, .joblib)
-├── results/                      # Results outputs
-├── README.md                     # This file
-├── requirements.txt              # Python dependencies
-└── environment.yml               # Conda environment
+|
+|-- 0_preprocessing/                  # Tool wrappers for generating phase predictions
+|   |-- UNIVERSAL_SEURAT.R            # Seurat CellCycleScoring wrapper
+|   |-- UNIVERSAL_TRICYCLE.R          # Tricycle wrapper
+|   |-- UNIVERSAL_REVELIO.R           # Revelio wrapper (human only)
+|   |-- UNIVERSAL_ccAFv2.py           # ccAFv2 wrapper
+|   |-- RUN_ALL_TOOLS_EXAMPLE.sh      # Example: run all 4 tools on one dataset
+|   |-- UNIVERSAL_TOOLS_README.md     # Usage guide for all tool wrappers
+|   |-- renormalize_GSE64016.sh       # Fix: log-normalize GSE64016 benchmark
+|   |-- transpose_GSE64016.py         # Transpose GSE64016 matrix
+|   |-- seurat_normalize_python.py    # Python log-normalization utility
+|   `-- RENORMALIZE_GSE64016_README.md
+|
+|-- 1_consensus_labeling/             # Consensus phase labeling from multiple tools
+|   |-- analyze/                      # Generate contingency tables and heatmaps
+|   |   |-- create_contingency_flexible.py
+|   |   |-- generate_heatmap_flexible.py
+|   |   `-- run_analysis_mouse_human.sh
+|   |-- assign/                       # Apply manual phase mappings
+|   |-- merge/
+|   |   `-- merge_consensus.py        # Merge predictions where >=N tools agree
+|   |-- results/                      # Output: tool predictions and consensus labels
+|   `-- WORKFLOW_MOUSE_HUMAN.md       # Detailed 5-step workflow documentation
+|
+|-- 2_model_training/                 # Model training
+|   |-- models/                       # Model architecture definitions
+|   |   |-- dense_models.py           # SimpleDense (DNN3), DeepDense (DNN4), EnhanceDense (DNN5)
+|   |   |-- cnn_models.py             # CNN model
+|   |   `-- hybrid_models.py          # Hybrid CNN-Dense, FeatureEmbedding
+|   |-- utils/                        # Training utilities (imported by main scripts)
+|   |   |-- nested_cv.py              # Nested cross-validation core logic
+|   |   |-- data_utils.py             # Data loading and preprocessing
+|   |   |-- training_utils.py         # Metrics, focal loss, confusion matrices
+|   |   |-- optuna_utils.py           # Optuna objective functions (DL)
+|   |   |-- optuna_tml.py             # Optuna objective functions (TML)
+|   |   |-- io_utils.py               # Save/load model weights and scalers
+|   |   `-- visualization.py          # Training curves, confusion matrix plots
+|   |-- train_deep_learning.py        # CLI: train any DL model
+|   `-- train_traditional_ml.py       # CLI: train any TML model
+|
+|-- 3_evaluation/                     # Benchmark evaluation
+|   |-- evaluate_models.py            # Main evaluation script
+|   |-- evaluate_models_v2.py         # Updated evaluation with additional features
+|   |-- model_loader.py               # Load trained models and scalers
+|   |-- ensemble_fusion.py            # Score and decision fusion (top-3 ensemble)
+|   `-- consolidate_training_and_benchmark.py  # Merge training + benchmark metrics
+|
+|-- 4_interpretability/               # SHAP feature importance analysis
+|   |-- run_4_shap_analyses.sh        # Master SHAP run script
+|   |-- run_4_shap_analyses.slurm     # SLURM job file for HPC
+|   `-- SHAP_results/                 # SHAP output: plots and top-feature CSVs
+|
+|-- 5_visualization/                  # Publication figure generation
+|   |-- 1_plot_table_1.py             # Marker gene expression bar plot (Table 1)
+|   |-- 2_compare_training_datasets.py
+|   |-- 3_generate_all_benchmark_results.py   # Generate result CSVs + heatmaps
+|   |-- 4_plot_benchmark_results.py   # 2x2 benchmark line plots (main figure)
+|   |-- 5_plot_tool_comparison_barplot.py     # Models vs existing tools comparison
+|   `-- heatmap_barplot_lineplots_csv/         # Output CSVs and figures by training dataset
+|
+|-- I_actually_run_to_train/          # HPC pipeline master scripts (SLURM)
+|   |-- run_all_new_evaluate_visu.sh  # Entry point: run evaluation + visualization
+|   |-- run_pipeline_generic.sh       # Generic 3-step evaluation pipeline
+|   |-- train_dl_generic.sh           # Generic DL SLURM training script
+|   `-- train_tml_generic.sh          # Generic TML SLURM training script
+|
+|-- distribution_analysis/            # Dataset expression distribution analysis
+|-- gene_lists/                       # Pre-computed gene intersection lists
+|-- Has_cell_cycle_effect_or_not/     # PCA and scoring analysis of cell cycle effect
+|-- README.md
+`-- .gitignore
 ```
 
 ---
 
 ## Installation
 
-### Using Conda (Recommended)
+This project uses a Conda environment with PyTorch GPU support. CUDA is required for training.
 
 ```bash
 # Clone the repository
+git clone <repository_url>
 cd cell_cycle_prediction
 
-# Create conda environment
-conda env create -f environment.yml
+# Activate the existing pytorch conda environment
+conda activate pytorch
 
-# Activate environment
-conda activate cell_cycle_prediction
-```
-
-### Using pip
-
-```bash
-# Install dependencies
+# Alternatively, install from requirements file
 pip install -r requirements.txt
 ```
 
----
-
-# Pipeline Steps
-
-## STEP 0: Data Preprocessing
-
-**Purpose**: Normalize scRNA-seq data and generate predictions from existing tools.
-
-**Preprocessing Requirements:**
-- Normalize gene expression using Seurat's `LogNormalize` or similar method
-- Format: CSV with rows=cells, columns=genes
-- Run prediction tools: Seurat CellCycleScore, Tricycle, Revelio, ccAFv2
-
-**Output Format Required:**
-```csv
-CellID,Predicted
-CELL_001,G1
-CELL_002,S
-CELL_003,G2M
-```
-
-**Note**: Revelio only supports human genes. For mouse data, use Seurat, Tricycle, and ccAFv2.
+**Requirements:** PyTorch (GPU), scikit-learn, LightGBM, Optuna, imbalanced-learn, SHAP, pandas, numpy, matplotlib, seaborn
 
 ---
 
-## STEP 1: Consensus Labeling
+## Pipeline
 
-**Purpose**: Create consensus training labels by harmonizing predictions from multiple tools.
+The pipeline has 5 steps. Steps 0-1 were completed during project development and are documented here for reproducibility. A reviewer can reproduce Steps 2-5 directly.
 
-**Why Consensus?** No ground truth exists for most training data. Consensus from multiple established tools provides more reliable labels than any single method.
+---
 
-**Approach**: We use **Seurat CellCycleScore as the reference** and map other tools (Tricycle, ccAFv2, Revelio) to align with Seurat's predictions.
+### Step 0: Data Preprocessing
 
-### Workflow Overview
+**Purpose:** Normalize raw scRNA-seq data and generate phase predictions from 4 existing tools.
+
+**Note:** This step was run once during data preparation. The scripts are provided for reproducibility with new datasets.
+
+Run all 4 tools on a dataset:
+```bash
+cd 0_preprocessing
+
+# Seurat CellCycleScoring (R)
+Rscript UNIVERSAL_SEURAT.R \
+  --input /path/to/expression_matrix.csv \
+  --species human \
+  --output /path/to/seurat_predictions.csv
+
+# Tricycle (R)
+Rscript UNIVERSAL_TRICYCLE.R \
+  --input /path/to/expression_matrix.csv \
+  --species human \
+  --output /path/to/tricycle_predictions.csv
+
+# Revelio (R, human only)
+Rscript UNIVERSAL_REVELIO.R \
+  --input /path/to/expression_matrix.csv \
+  --output /path/to/revelio_predictions.csv
+
+# ccAFv2 (Python)
+python UNIVERSAL_ccAFv2.py \
+  --input /path/to/expression_matrix.csv \
+  --output /path/to/ccafv2_predictions.csv
+```
+
+See `0_preprocessing/UNIVERSAL_TOOLS_README.md` for detailed usage and supported input formats (10X MTX, CSV, TXT).
+
+**Important note for GSE64016:** This benchmark was not log-normalized in the original download (values up to 129,617 vs training data max ~6). Fix with:
+```bash
+bash 0_preprocessing/renormalize_GSE64016.sh /path/to/GSE64016.csv
+```
+
+---
+
+### Step 1: Consensus Labeling
+
+**Purpose:** Create high-confidence training labels by merging predictions from multiple tools. No ground truth exists for training datasets, so consensus from multiple tools provides reliable labels.
+
+**Note:** This step was completed for all training datasets. The methodology and outputs are in `1_consensus_labeling/results/`.
+
+**Workflow (5 steps):**
 
 ```
-1. ANALYZE: Compare OTHER tools vs SEURAT (reference)
-   ↓
-2. MANUAL INSPECTION: Inspect heatmap colors
-   ↓
-3. CREATE YAML: Map other tool phases to Seurat phases
-   ↓
-4. ASSIGN: Apply mappings to tool predictions
-   ↓
-5. MERGE: Create consensus where ≥N tools agree
+1. ANALYZE   - Generate contingency tables and obs/expected ratio heatmaps
+2. INSPECT   - Manually inspect heatmap colors to guide phase mapping
+3. MAP       - Create YAML mapping files (sub-phases -> G1/S/G2M)
+4. ASSIGN    - Apply mappings to reassign each tool's predictions
+5. MERGE     - Take cells where >=3 tools agree as consensus labels
 ```
 
-### 1.1 Analyze Tool Agreements
-
-**Master Script** (automated for mouse + human):
+**Step 1 - Analyze tool agreement:**
 ```bash
 cd 1_consensus_labeling/analyze
+
+# Automated for mouse and human datasets
 bash run_analysis_mouse_human.sh
-```
 
-**What it does:**
-- **Mouse:** Creates 2 heatmaps (Seurat vs Tricycle, Seurat vs ccAFv2)
-- **Human:** Creates 3 heatmaps (Seurat vs Tricycle, Seurat vs ccAFv2, Seurat vs Revelio)
-- **IMPORTANT:** Only compares OTHER tools against Seurat (reference), NOT all pairwise combinations
-
-**For Custom Datasets** (manual):
-```bash
-# Step 1: Create contingency table (compare YOUR_TOOL vs Seurat)
+# Or manually for a custom dataset
 python create_contingency_flexible.py \
-  --tool1-file /path/to/seurat_predictions.csv \
-  --tool1-name seurat \
-  --tool2-file /path/to/tricycle_predictions.csv \
-  --tool2-name tricycle \
-  --dataset-name my_dataset \
-  --output-dir results/
+  --tool1-file seurat_predictions.csv --tool1-name seurat \
+  --tool2-file tricycle_predictions.csv --tool2-name tricycle \
+  --dataset-name my_dataset --output-dir results/
 
-# Step 2: Generate heatmap
 python generate_heatmap_flexible.py \
   --contingency-table results/contingency_tables/contingency_seurat_vs_tricycle_my_dataset.csv \
-  --tool1-name seurat \
-  --tool2-name tricycle \
-  --dataset-name my_dataset \
-  --output-dir results/heatmaps/
+  --tool1-name seurat --tool2-name tricycle \
+  --dataset-name my_dataset --output-dir results/heatmaps/
 ```
 
-**Output**:
-- Contingency tables: How often Seurat and other tool agree
-- Heatmaps: Observed/expected ratios (GREEN = high alignment with Seurat, RED = low alignment)
+**Step 2 - Manual heatmap inspection:**
+- Green cells = strong agreement between tool and Seurat (reference) -> map to that Seurat phase
+- Red cells = weak agreement
+- Map each tool's sub-phases (G1.S, G2, M.G1, etc.) to one of G1, S, G2M
 
-### 1.2 Manual Inspection
-
-Open the heatmap images and inspect color patterns to see which OTHER tool phases align with Seurat:
-- **GREEN cells** → Strong alignment with Seurat → Map this phase to the corresponding Seurat phase
-- **RED cells** → Weak alignment → These phases don't match well
-- **YELLOW cells** → Random association
-
-**Example Interpretation** (mapping Tricycle/ccAFv2/Revelio to Seurat):
-- If Tricycle's "G1.S" has GREEN with Seurat's "S" → map `G1.S → S`
-- If ccAFv2's "G2" has GREEN with Seurat's "G2M" → map `G2 → G2M`
-- If Tricycle's "M.G1" has GREEN with Seurat's "G1" → map `M.G1 → G1`
-
-**Goal**: Map all other tool phases to Seurat's 3 main phases (G1, S, G2M)
-
-### 1.3 Create YAML Phase Mappings
-
-Based on heatmap inspection, create a YAML config file:
-
-**Example**: `configs/phase_mappings/my_dataset.yaml`
-
-```yaml
-# Phase mappings for my_dataset
-# Based on heatmap analysis
-
-dataset:
-  name: "my_dataset"
-  species: "human"
-  tools: ["seurat", "tricycle", "ccafv2", "revelio"]
-
-mappings:
-  seurat:
-    G1: G1
-    S: S
-    G2M: G2M
-
-  tricycle:
-    # Adjust based on YOUR heatmap inspection!
-    G1: G1
-    G1.S: S         # If heatmap shows G1.S aligns with S
-    S: S
-    G2: G2M         # If heatmap shows G2 aligns with G2M
-    G2M: G2M
-    M: G2M
-    M.G1: G1
-    NA: G1
-
-  ccafv2:
-    qG0: G1
-    Early G1: G1
-    Late G1: G1
-    G1: G1
-    G1.S: S
-    S: S
-    Late S: S
-    G2: G2M
-    G2M: G2M
-    M: G2M
-
-  revelio:
-    G0: G1
-    G1: G1
-    G1.S: S
-    S: S
-    G2: G2M
-    G2M: G2M
-    M: G2M
-    M.G1: G1
-
-rationale:
-  "Mappings determined by obs/expected ratio heatmaps."
-```
-
-### 1.4 Apply Phase Reassignment
-
-**Coming soon**: Flexible reassignment script that reads your YAML config and applies mappings.
-
-### 1.5 Merge Consensus Labels
-
+**Step 5 - Merge consensus:**
 ```bash
-python merge/merge_consensus.py \
+python 1_consensus_labeling/merge/merge_consensus.py \
   --input ./reassigned/ \
   --output ./consensus/ \
   --sample my_dataset \
   --dataset my_dataset
 ```
 
-**Output**:
-- `my_dataset_overlapped_at_least_two_regions.csv` (≥2 tools agree)
-- `my_dataset_overlapped_at_least_three_regions.csv` (≥3 tools agree)
-- `my_dataset_overlapped_all_four_regions.csv` (all 4 tools agree, if applicable)
+Outputs: cells where >=2, >=3, or all 4 tools agree (use >=3 for high-confidence labels).
 
-**Recommendation**: Use ≥3 tools agreement for high-confidence labels.
-
-**See `1_consensus_labeling/WORKFLOW_MOUSE_HUMAN.md` for detailed workflow!**
+See `1_consensus_labeling/WORKFLOW_MOUSE_HUMAN.md` for the complete methodology.
 
 ---
 
-## STEP 2: Model Training
+### Step 2: Model Training
 
-Train deep learning and traditional ML models on consensus-labeled data.
+**Purpose:** Train DL and TML models using nested cross-validation with Optuna hyperparameter optimization.
 
-### 2.1 Deep Learning Models
-
+**On HPC (recommended):** Use the generic SLURM scripts in `I_actually_run_to_train/`:
 ```bash
-# Train DNN3 (SimpleDense - top performer) on REH data
+# Train a DL model via SLURM
+bash I_actually_run_to_train/train_dl_generic.sh --model simpledense --dataset reh
+
+# Train a TML model via SLURM
+bash I_actually_run_to_train/train_tml_generic.sh --model random_forest --dataset reh
+```
+
+**Direct CLI (for custom datasets):**
+```bash
+# Train SimpleDense (DNN3) on REH data
 python 2_model_training/train_deep_learning.py \
   --model simpledense \
   --dataset reh \
-  --output models/saved_models/dnn3/ \
+  --output models/reh/simpledense/ \
   --trials 50 \
   --cv 5
 
-# Train DNN5 (DeepDense) on SUP data
+# Train EnhanceDense (DNN5) on PBMC data
 python 2_model_training/train_deep_learning.py \
-  --model deepdense \
-  --dataset sup \
-  --output models/saved_models/dnn5/ \
-  --trials 30 \
-  --cv 5
-
-# Train CNN model (dataset defaults to reh)
-python 2_model_training/train_deep_learning.py \
-  --model cnn \
-  --output models/saved_models/cnn/ \
+  --model enhancedense \
+  --dataset pbmc \
+  --output models/pbmc/enhancedense/ \
   --trials 50 \
   --cv 5
 
-# Train with CUSTOM training data (your own CSV)
+# Train Random Forest on mouse brain data
+python 2_model_training/train_traditional_ml.py \
+  --model random_forest \
+  --dataset mouse_brain \
+  --output models/mouse_brain/rf/ \
+  --trials 50 \
+  --cv 5
+
+# Train with your own CSV (--data overrides --dataset)
 python 2_model_training/train_deep_learning.py \
   --model simpledense \
   --data /path/to/your_training_data.csv \
-  --output models/custom_model/ \
+  --output models/custom/ \
   --trials 50 \
   --cv 5
 ```
 
-**Available Models**:
-- `simpledense` - DNN3 (3-layer: input→128→64→3)
-- `deepdense` - DNN5 (5-layer: input→256→128→64→3)
-- `cnn` - 1D Convolutional (Conv(32)→Conv(64)→Dense)
-- `hbdcnn` - Hybrid CNN+Dense
-- `fe` - Feature Embedding
-
-### 2.2 Traditional ML Models
-
-```bash
-# Train Random Forest on REH data
-python 2_model_training/train_traditional_ml.py \
-  --model random_forest \
-  --dataset reh \
-  --output models/saved_models/random_forest/ \
-  --trials 50 \
-  --cv 5
-
-# Train LightGBM on SUP data
-python 2_model_training/train_traditional_ml.py \
-  --model lgbm \
-  --dataset sup \
-  --output models/saved_models/lgbm/ \
-  --trials 50 \
-  --cv 5
-
-# Train Ensemble (VotingClassifier: AdaBoost + RF + LGBM)
-python 2_model_training/train_traditional_ml.py \
-  --model ensemble \
-  --dataset reh \
-  --output models/saved_models/ensemble_tml/ \
-  --trials 50 \
-  --cv 5
-
-# Train with CUSTOM training data (your own CSV)
-python 2_model_training/train_traditional_ml.py \
-  --model random_forest \
-  --data /path/to/your_training_data.csv \
-  --output models/custom_rf/ \
-  --trials 50 \
-  --cv 5
+**Training data CSV format:**
 ```
-
-**Available Models**:
-- `adaboost` - AdaBoost classifier
-- `random_forest` - Random Forest
-- `lgbm` - LightGBM
-- `ensemble` - VotingClassifier (AdaBoost + RF + LGBM)
-
-**Note**: When `--data` is provided, the `--dataset` argument (reh/sup) is ignored.
-
----
-
-## STEP 3: Model Evaluation
-
-Evaluate trained models on benchmark datasets with ground truth labels.
-
-**NEW**: Evaluation now includes **class-wise metrics** (per-class precision, recall, F1, accuracy, MCC) for all 3 cell cycle phases (G1, S, G2M)!
-
-### 3.1 Evaluate on Standard Benchmarks
-
-```bash
-# Evaluate Deep Learning model on all benchmarks (default)
-python 3_evaluation/evaluate_models.py \
-  --model_path models/saved_models/dnn3/dnn3_NFT_reh_fld_1.pt \
-  --output results/dnn3_all_benchmarks.csv
-# Output includes 4 rows (SUP, GSE146773, GSE64016, Buettner_mESC)
-
-# Evaluate Traditional ML model on all benchmarks
-python 3_evaluation/evaluate_models.py \
-  --model_path models/saved_models/random_forest/rf_NFT_reh_fld_1.joblib \
-  --output results/rf_all_benchmarks.csv
-
-# Evaluate on specific benchmarks only
-python 3_evaluation/evaluate_models.py \
-  --model_path models/saved_models/dnn3/dnn3_NFT_reh_fld_1.pt \
-  --benchmarks GSE146773 GSE64016 \
-  --output results/dnn3_two_benchmarks.csv
-# Output includes 2 rows (GSE146773, GSE64016 only)
-```
-
-### 3.2 Evaluate on Custom Benchmark ONLY
-
-```bash
-# Evaluate ONLY on custom benchmark (skips standard benchmarks)
-python 3_evaluation/evaluate_models.py \
-  --model_path models/saved_models/dnn3/dnn3_NFT_reh_fld_1.pt \
-  --custom_benchmark /path/to/reviewer_data.csv \
-  --custom_benchmark_name "Reviewer_Dataset" \
-  --output results/dnn3_custom_only.csv
-# Output includes 1 row (Reviewer_Dataset only)
-```
-
-### 3.3 Combine Standard + Custom Benchmarks
-
-```bash
-# Evaluate on specific standard benchmarks + custom benchmark
-python 3_evaluation/evaluate_models.py \
-  --model_path models/saved_models/dnn3/dnn3_NFT_reh_fld_1.pt \
-  --benchmarks GSE146773 \
-  --custom_benchmark /path/to/reviewer_data.csv \
-  --custom_benchmark_name "Reviewer_Dataset" \
-  --output results/dnn3_combined.csv
-# Output includes 2 rows (GSE146773 + Reviewer_Dataset)
-```
-
-**Custom Benchmark CSV Format**:
-```csv
-CellID,Predicted,gene1,gene2,gene3,...
-CELL_001,G1,2.5,3.1,0.8,...
-CELL_002,S,1.2,4.5,2.1,...
-CELL_003,G2M,3.4,1.9,5.2,...
-```
-
-**Important**: First column = cell_id, second column = phase_label (G1/S/G2M), remaining = genes
-
-### 3.4 Output Format (Class-Wise Metrics)
-
-The evaluation CSV now includes **15 additional class-wise columns**:
-
-**Overall Metrics:**
-- `accuracy`, `f1`, `precision`, `recall`, `roc_auc`, `balanced_acc`, `mcc`, `kappa`
-
-**Class-Wise Metrics (G1, S, G2M):**
-- `precision_g1`, `precision_s`, `precision_g2m`
-- `recall_g1`, `recall_s`, `recall_g2m`
-- `f1_g1`, `f1_s`, `f1_g2m`
-- `accuracy_g1`, `accuracy_s`, `accuracy_g2m`
-- `mcc_g1`, `mcc_s`, `mcc_g2m`
-
-**Example Output:**
-```csv
-model,dataset,accuracy,f1,precision,recall,roc_auc,balanced_acc,mcc,kappa,precision_g1,precision_s,precision_g2m,recall_g1,recall_s,recall_g2m,f1_g1,f1_s,f1_g2m,accuracy_g1,accuracy_s,accuracy_g2m,mcc_g1,mcc_s,mcc_g2m
-dnn3,GSE146773,75.2,70.5,72.3,69.1,84.2,74.8,0.65,0.63,78.5,68.2,74.1,80.1,65.3,72.5,79.3,66.7,73.3,85.2,70.1,75.8,0.72,0.58,0.67
-```
-
-**Benefits:**
-- Identify which phases are harder to predict
-- Detect class imbalance issues
-- Compare per-class performance across species
-- Create detailed supplementary tables for manuscripts
-
-### 3.5 Ensemble Methods
-
-Ensemble fusion is implemented in `3_evaluation/ensemble_fusion.py` with two methods:
-- **Score Fusion**: Averages predicted probabilities across models
-- **Decision Fusion**: Majority voting across model predictions
-
-Example usage (call the functions directly in Python):
-
-```python
-from ensemble_fusion import score_level_fusion, decision_level_fusion
-
-# Top-3 models
-model_paths = [
-    "models/saved_models/dnn3/dnn3_NFT_reh_fld_1.pt",
-    "models/saved_models/dnn5/dnn5_NFT_reh_fld_2.pt",
-    "models/saved_models/cnn/cnn_NFT_reh_fld_3.pt"
-]
-
-# Score fusion on GSE146773
-result_score = score_level_fusion(model_paths, "GSE146773")
-result_score.to_csv("results/top3_score_gse146773.csv", index=False)
-
-# Decision fusion on GSE64016
-result_decision = decision_level_fusion(model_paths, "GSE64016")
-result_decision.to_csv("results/top3_decision_gse64016.csv", index=False)
-```
-
----
-
-## STEP 4: SHAP Interpretability Analysis
-
-Perform SHAP (SHapley Additive exPlanations) analysis to identify biologically important features.
-
-**Works with both Deep Learning (.pt) and Traditional ML (.joblib) models!**
-
-```bash
-# SHAP analysis for DNN3 on GSE146773 benchmark (default)
-python 4_interpretability/run_shap_analysis.py \
-  --model_path models/saved_models/dnn3/dnn3_NFT_reh_fld_1.pt \
-  --benchmark GSE146773 \
-  --output_dir results/shap/dnn3/
-
-# SHAP analysis for Random Forest on GSE64016 benchmark
-python 4_interpretability/run_shap_analysis.py \
-  --model_path models/saved_models/random_forest/rf_NFT_reh_fld_1.joblib \
-  --benchmark GSE64016 \
-  --output_dir results/shap/random_forest/
-
-# SHAP analysis on CUSTOM benchmark data
-python 4_interpretability/run_shap_analysis.py \
-  --model_path models/saved_models/dnn3/dnn3_NFT_reh_fld_1.pt \
-  --custom_benchmark /path/to/your_benchmark.csv \
-  --custom_benchmark_name "MyBenchmark" \
-  --output_dir results/shap/custom/
-```
-
-**Available Benchmarks**:
-- `GSE146773` (default)
-- `GSE64016`
-- `SUP`
-- `Buettner_mESC`
-- Custom benchmark via `--custom_benchmark`
-
-**Outputs**:
-- SHAP summary plots (PNG)
-- Top features CSV (ranked by importance)
-- SHAP values text file
-
-**Technical Note**: Uses `KernelExplainer` for both DL and TML models. LGBM compatibility ensured via lambda wrapping.
-
----
-
-## STEP 5: Visualization
-
-Advanced visualization tools for publication-quality figures.
-
-```python
-from advanced_plots import plot_calibration_curve, plot_heatmap
-
-# Calibration curves
-plot_calibration_curve(y_true, y_pred_proba, output_path="results/calibration.png")
-
-# Class-wise precision/recall heatmaps
-plot_heatmap(confusion_matrix, output_path="results/confusion_heatmap.png")
-```
-
----
-
-## Using Custom Data
-
-The pipeline supports training and evaluation with your own datasets while keeping REH/SUP as defaults.
-
-### Custom Training Data
-
-**CSV Format Required:**
-```csv
 cell_id,phase_label,gene1,gene2,gene3,...
 CELL_001,G1,2.5,3.1,0.8,...
 CELL_002,S,1.2,4.5,2.1,...
 CELL_003,G2M,3.4,1.9,5.2,...
 ```
+- First column: cell ID
+- Second column: phase label (G1, S, or G2M)
+- Remaining columns: log-normalized gene expression values
 
-**Important:**
-- **First column**: Cell ID (any name)
-- **Second column**: Phase label (must be `G1`, `S`, or `G2M`)
-- **Remaining columns**: Gene expression values (normalized)
+**Available DL models:**
 
-**Train with Custom Data:**
+| Argument | Model | Architecture |
+|----------|-------|--------------|
+| `simpledense` | DNN3 (SimpleDense) | Dense 128->64->3 |
+| `deepdense` | DNN4 (DeepDense) | Dense 256->128->64->3 |
+| `enhancedense` | DNN5 (EnhanceDense) | Dense 512->256->128->64->3 |
+| `cnn` | CNN | 1D Conv(32)->Conv(64)->Dense |
+| `hybrid` | Hybrid CNN-Dense | Conv + Dense layers |
+| `fe` | Feature Embedding | Embedding->Dense |
+
+**Available TML models:**
+
+| Argument | Model |
+|----------|-------|
+| `adaboost` | AdaBoost |
+| `random_forest` | Random Forest |
+| `lgbm` | LightGBM |
+| `ensemble_embedding3tml` | Ensemble (AdaBoost + RF + LGBM) |
+
+**Training features:**
+- 5-fold nested cross-validation (5-fold outer, 5-fold inner for hyperparameter search)
+- Optuna hyperparameter optimization (50-100 trials per model)
+- SMOTE + random undersampling for class imbalance
+- Focal loss for DL models
+- Outputs: model weights (`.pt` for DL, `.pkl`/`.joblib` for TML), scalers, metrics CSVs
+
+---
+
+### Step 3: Benchmark Evaluation
+
+**Purpose:** Evaluate trained models on benchmark datasets with ground truth labels.
 
 ```bash
-# Deep Learning with custom data
-python 2_model_training/train_deep_learning.py \
-  --model simpledense \
-  --data /path/to/your_training_data.csv \
-  --output models/custom_model/ \
-  --trials 50 \
-  --cv 5
-
-# Traditional ML with custom data
-python 2_model_training/train_traditional_ml.py \
-  --model random_forest \
-  --data /path/to/your_training_data.csv \
-  --output models/custom_rf/ \
-  --trials 50 \
-  --cv 5
-```
-
-**Note:** When `--data` is provided, the `--dataset` argument (reh/sup) is ignored.
-
-### Custom Benchmark Data
-
-**Same CSV format as training data** (cell_id, phase_label, genes...)
-
-**Evaluate on Custom Benchmark:**
-
-```bash
-# Evaluate model on custom benchmark
+# Evaluate a DL model on all standard benchmarks
 python 3_evaluation/evaluate_models.py \
-  --model_path models/saved_models/dnn3/dnn3_NFT_reh_fld_1.pt \
-  --custom_benchmark /path/to/your_benchmark.csv \
-  --custom_benchmark_name "MyBenchmark" \
-  --output results/custom_evaluation.csv
+  --model_path models/reh/simpledense/simpledense_NFT_reh_fld_1.pt \
+  --output results/simpledense_reh_all_benchmarks.csv
 
-# Combine standard + custom benchmarks
+# Evaluate a TML model
 python 3_evaluation/evaluate_models.py \
-  --model_path models/saved_models/dnn3/dnn3_NFT_reh_fld_1.pt \
+  --model_path models/reh/rf/rf_NFT_reh_fld_1.joblib \
+  --output results/rf_reh_all_benchmarks.csv
+
+# Evaluate on specific benchmarks
+python 3_evaluation/evaluate_models.py \
+  --model_path models/reh/simpledense/simpledense_NFT_reh_fld_1.pt \
   --benchmarks GSE146773 GSE64016 \
+  --output results/simpledense_two_benchmarks.csv
+
+# Evaluate on your own custom benchmark
+python 3_evaluation/evaluate_models.py \
+  --model_path models/reh/simpledense/simpledense_NFT_reh_fld_1.pt \
   --custom_benchmark /path/to/your_benchmark.csv \
-  --custom_benchmark_name "MyBenchmark"
+  --custom_benchmark_name MyDataset \
+  --output results/simpledense_custom.csv
 ```
 
-**SHAP Analysis on Custom Benchmark:**
+**Standard benchmarks:** `GSE146773`, `GSE64016`, `Buettner_mESC`, `SUP`
 
+**Custom benchmark CSV format** (same as training format):
+```
+cell_id,phase_label,gene1,gene2,...
+CELL_001,G1,2.5,3.1,...
+```
+
+**Output metrics per benchmark row:**
+- Overall: `accuracy`, `f1`, `precision`, `recall`, `roc_auc`, `balanced_acc`, `mcc`, `kappa`
+- Per-class (G1, S, G2M): `precision_g1`, `recall_g1`, `f1_g1`, `mcc_g1`, etc.
+
+**Ensemble fusion (top-3 models):**
+
+Decision fusion and score fusion are implemented in `3_evaluation/ensemble_fusion.py`. The top-3 models are selected once (based on cross-validation performance) and applied consistently across all benchmarks.
+
+---
+
+### Step 4: SHAP Interpretability
+
+**Purpose:** Identify biologically important genes driving model predictions.
+
+**Note:** SHAP analysis was completed on the Buettner_mESC benchmark. Results are in `4_interpretability/SHAP_results/`.
+
+To run SHAP on a new model or benchmark (submit via SLURM):
 ```bash
-python 4_interpretability/run_shap_analysis.py \
-  --model_path models/saved_models/dnn3/dnn3_NFT_reh_fld_1.pt \
-  --custom_benchmark /path/to/your_benchmark.csv \
-  --custom_benchmark_name "MyBenchmark" \
-  --output_dir results/shap/custom/
+sbatch 4_interpretability/run_4_shap_analyses.slurm
 ```
 
-### Data Preprocessing Tips
+Or modify and run the shell script:
+```bash
+bash 4_interpretability/run_4_shap_analyses.sh
+```
 
-1. **Normalization**: Use Seurat normalization (LogNormalize) or similar
-2. **Gene Selection**: Include only highly variable genes or marker genes
-3. **Phase Labels**: Must be exactly `G1`, `S`, or `G2M` (case-sensitive)
-4. **Missing Features**: Pipeline automatically handles gene mismatches by:
-   - Adding missing genes as zeros
-   - Dropping extra genes
-   - Reordering to match training features
+**SHAP outputs per model/benchmark:**
+- `*_shap_summary.png` - Bar plot of mean absolute SHAP values (feature importance ranking)
+- `*_top_features.csv` - Top genes ranked by SHAP importance
+- `*_SHAP.txt` - Text summary
+
+---
+
+### Step 5: Visualization
+
+**Purpose:** Generate all publication-quality figures.
+
+Run scripts in order:
+```bash
+# Figure: marker gene expression across phases (Table 1 equivalent)
+python 5_visualization/1_plot_table_1.py
+
+# Generate benchmark result CSVs and heatmaps from trained models
+python 5_visualization/3_generate_all_benchmark_results.py
+
+# Figure: 2x2 benchmark performance line plots (main manuscript figure)
+python 5_visualization/4_plot_benchmark_results.py
+
+# Figure: model vs existing tools comparison bar plot
+python 5_visualization/5_plot_tool_comparison_barplot.py
+```
+
+**Output figures** (in `5_visualization/heatmap_barplot_lineplots_csv/`):
+- Precision/recall heatmaps per benchmark (PDF, editable)
+- 2x2 combined benchmark panel (PDF, PNG, EPS)
+- Tool comparison bar plot (PDF, PNG)
+
+**Figure settings:** Times New Roman, 600 DPI, PDF with TrueType fonts (editable in Adobe Illustrator).
 
 ---
 
 ## Models
 
-### Deep Learning Models
+### Deep Learning
 
-| Model | Description | Architecture | Performance |
-|-------|-------------|--------------|-------------|
-| DNN3 (SimpleDense) | 3-layer dense network | input→128→64→3 | Top performer (75% accuracy on benchmarks) |
-| DNN5 (DeepDense) | 5-layer dense network | input→256→128→64→3 | Deep architecture for complex patterns |
-| CNN | 1D Convolutional | Conv(32)→Conv(64)→Dense | Captures local gene patterns |
-| Hybrid | CNN + Dense | Conv→Dense layers | Feature extraction + classification |
-| Feature Embedding | Learned embedding | Embedding→Dense | Dimensionality reduction |
+| Model Name | Alias | Architecture | Notes |
+|------------|-------|--------------|-------|
+| SimpleDense | DNN3 | Dense 128->64->3 | Strong cross-dataset performer |
+| DeepDense | DNN4 | Dense 256->128->64->3 | |
+| EnhanceDense | DNN5 | Dense 512->256->128->64->3 | Top DL model on REH training |
+| CNN | CNN | 1D Conv(32)->Conv(64)->Dense | |
+| Hybrid CNN-Dense | Hybrid | Conv + Dense | |
+| Feature Embedding | FE | Embedding->Dense | |
 
-### Traditional ML Models
-- AdaBoost
-- Random Forest
-- LightGBM
-- Ensemble (VotingClassifier: AdaBoost + RF + LGBM)
+### Traditional ML
 
-### Ensemble Models
-- Top-3 Decision Fusion (majority voting)
-- Top-3 Score Fusion (probability averaging)
+| Model | Notes |
+|-------|-------|
+| AdaBoost | |
+| Random Forest | |
+| LightGBM | |
+| Ensemble (AdaBoost + RF + LGBM) | Voting classifier |
+
+### Ensemble Fusion (Top-3 DL)
+
+- **Score Fusion:** Average predicted probabilities from top-3 DL models
+- **Decision Fusion:** Majority vote from top-3 DL model predictions
+- Top-3 models are selected once from cross-validation results and applied to all benchmarks
 
 ---
 
-## Configuration
+## Reproducibility Notes
 
-All parameters are configured via YAML files in `configs/`:
+1. **Consensus labeling** requires manual heatmap inspection (Step 1, Step 2). The manual phase mappings used in this study are recorded in `1_consensus_labeling/assign/` YAML files.
 
-### Dataset Configuration (`configs/datasets.yaml`)
-- Training data paths (REH, SUP-B15)
-- Benchmark data paths (GSE146773, GSE64016, Buettner_mESC)
-- Preprocessing parameters
-- Class labels
+2. **Gene intersection:** All models are trained on the intersection of genes present in all 7 datasets and all benchmarks (6,066 genes). The pre-computed gene list is in `gene_lists/`.
 
-### Model Configuration (`configs/models/dnn3.yaml`)
-- Model architecture
-- Training hyperparameters
-- Optimizer settings
-- Loss function parameters
+3. **Gene name format:** Benchmark gene names (UPPERCASE) are auto-converted to capitalized format at evaluation time. No manual preprocessing needed.
 
-### Phase Mapping (`configs/phase_mappings/`)
-- Sub-phase to main phase mappings
-- Rationale for each mapping based on heatmap analysis
-- Dataset-specific configurations
+4. **GSE64016 normalization:** The raw download is not log-normalized. Use `0_preprocessing/renormalize_GSE64016.sh` before evaluation.
+
+5. **Class imbalance:** REH and SUP-B15 have weak cell cycle activity (~80% G1 cells). Models handle this via SMOTE + undersampling + focal loss, but cross-dataset generalization on highly proliferative datasets is the main evaluation target.
 
 ---
 
 ## Citation
 
-If you use this code, please cite:
+If you use this code or pipeline, please cite:
 
 ```bibtex
-@inproceedings{anonymous2025cellcycle,
+@inproceedings{akhter2025cellcycle,
   title={Deep Learning Models for Cell Cycle Phase Prediction from Single-Cell RNA Sequencing Data},
-  author={Halima Akhter, Donlad Adjeroh, Gangqing Hu},
+  author={Halima Akhter, Donald Adjeroh, Gangqing Hu},
   booktitle={AAAI Workshop 2026},
   year={2025}
 }
@@ -823,5 +521,6 @@ If you use this code, please cite:
 
 ## Acknowledgments
 
-- Existing Tools: Seurat, Tricycle, Revelio, ccAFv2
-- Benchmark Datasets: GSE146773, GSE64016, Buettner mESC
+- Existing tools used for consensus labeling: Seurat, Tricycle, Revelio, ccAFv2
+- Benchmark datasets: GSE146773, GSE64016, Buettner mESC (E-MTAB-2805)
+- Training datasets: GSE293316 (REH, SUP-B15), GSE75748 (hPSC), GSE81682 (Nestorova mouse HSC), 10x Genomics PBMC, 10x Genomics Mouse Brain
