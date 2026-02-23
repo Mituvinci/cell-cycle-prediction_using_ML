@@ -120,7 +120,7 @@ Rscript UNIVERSAL_TRICYCLE.R \
   --species human \
   --output /path/to/tricycle_predictions.csv
 
-# Revelio (R, human only)
+# Revelio (R, human and mouse via ortholog gene conversion to uppercase)
 Rscript UNIVERSAL_REVELIO.R \
   --input /path/to/expression_matrix.csv \
   --output /path/to/revelio_predictions.csv
