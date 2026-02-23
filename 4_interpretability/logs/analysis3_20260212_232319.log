@@ -1,66 +1,0 @@
-/users/ha00014/.conda/envs/pytorch/lib/python3.10/site-packages/torch/cuda/__init__.py:1007: UserWarning: Can't initialize NVML
-  raw_cnt = _raw_device_count_nvml()
-/users/ha00014/.conda/envs/pytorch/lib/python3.10/site-packages/sklearn/base.py:493: UserWarning: X does not have valid feature names, but RobustScaler was fitted with feature names
-  warnings.warn(
-/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/4_interpretability/run_shap_analysis.py:119: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
-  with torch.no_grad(), torch.cuda.amp.autocast():
-
-================================================================================
-LOADING MODEL
-================================================================================
-Model: simpledense_NFT_nestorova_fld_1.pt
-Loading model type: simpledense
-Hyperparameters: {'learningrate': '0.0004583573004923492', 'optimizer': 'RMSprop', 'epochs': '1500'}
-✓ Loaded DL model: simpledense
-✓ Model loaded successfully (Deep Learning)
-================================================================================
-
-Loading benchmark data: GSE146773
-  [CROSS-SPECIES MODE] Using zero imputation for missing genes
-  [INFO] Using PREPROCESSED benchmark: GSE146773
-  Loaded 1067 samples
-  Features: 6479
-
-================================================================================
-LOADING BACKGROUND DATA (training)
-================================================================================
-  Loading background CSV: /users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_nestorova/nestorova_training_data.csv
-  Shape after dropping metadata: 514 cells x 7104 genes
-  Background ready: 514 cells x 6479 features (scaled)
-
-================================================================================
-SHAP ANALYSIS - DEEP LEARNING MODEL
-================================================================================
-Model: simpledense_NFT_nestorova_fld_1
-  Background source: training data (--background_data)
-Background samples: 514
-Test samples: 10
-Features: 6479
-nsamples: 6480
-
-Creating SHAP KernelExplainer...
-Computing SHAP values (this may take a while)...
-  0%|          | 0/10 [00:00<?, ?it/s] 10%|█         | 1/10 [00:05<00:49,  5.50s/it] 20%|██        | 2/10 [00:10<00:41,  5.22s/it] 30%|███       | 3/10 [00:15<00:35,  5.14s/it] 40%|████      | 4/10 [00:20<00:30,  5.09s/it] 50%|█████     | 5/10 [00:26<00:26,  5.30s/it] 60%|██████    | 6/10 [00:31<00:20,  5.13s/it] 70%|███████   | 7/10 [00:37<00:16,  5.40s/it] 80%|████████  | 8/10 [00:42<00:10,  5.42s/it] 90%|█████████ | 9/10 [00:48<00:05,  5.56s/it]100%|██████████| 10/10 [00:53<00:00,  5.57s/it]100%|██████████| 10/10 [00:53<00:00,  5.39s/it]
-Shape of shap_values after mean: (10, 6479)
-
-Generating SHAP summary plot...
-  Saved: simpledense_NFT_nestorova_fld_1_shap_summary.png
-
-Top 20 SHAP features: ['CD46', 'PCLO', 'RIMKLB', 'MPZL1', 'DNMBP', 'MAGED2', 'CTNNAL1', 'DCBLD2', 'DCUN1D4', 'PXDN', 'RBM4', 'PTK2', 'MYO1B', 'NUDT15', 'LAMB1', 'RAD51C', 'OBSL1', 'PHF19', 'FAM171A1', 'RAI14']
-✅ SHAP analysis completed. Results saved to results/shap_dnn3_nestorowa/mouse_to_human_gse146773/simpledense_NFT_nestorova_fld_1_SHAP.txt
-
-================================================================================
-TOP 10 MOST IMPORTANT FEATURES
-================================================================================
-CD46                          : 1.758601
-PCLO                          : 1.187622
-RIMKLB                        : 0.950321
-MPZL1                         : 0.904185
-DNMBP                         : 0.845686
-MAGED2                        : 0.604446
-CTNNAL1                       : 0.576518
-DCBLD2                        : 0.559900
-DCUN1D4                       : 0.520882
-PXDN                          : 0.498676
-================================================================================
-

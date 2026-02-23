@@ -1,65 +1,0 @@
-/users/ha00014/.conda/envs/pytorch/lib/python3.10/site-packages/torch/cuda/__init__.py:1007: UserWarning: Can't initialize NVML
-  raw_cnt = _raw_device_count_nvml()
-/users/ha00014/.conda/envs/pytorch/lib/python3.10/site-packages/sklearn/base.py:493: UserWarning: X does not have valid feature names, but RobustScaler was fitted with feature names
-  warnings.warn(
-/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/4_interpretability/run_shap_analysis.py:119: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
-  with torch.no_grad(), torch.cuda.amp.autocast():
-
-================================================================================
-LOADING MODEL
-================================================================================
-Model: enhancedense_NFT_reh_fld_1.pt
-Loading model type: enhancedense
-Hyperparameters: {'learningrate': '0.00010032385413174506', 'optimizer': 'RMSprop', 'nlayers': '5', 'nunits': '[256, 128, 64, 32, 16]', 'dropouts': '[0.2, 0.3, 0.4, 0.5, 0.5]', 'embeddim': '256', 'latentdim': '65', 'epochs': '1500'}
-✓ Loaded DL model: enhancedense
-✓ Model loaded successfully (Deep Learning)
-================================================================================
-
-Loading benchmark data: GSE146773
-  [INFO] Using PREPROCESSED benchmark: GSE146773
-  Loaded 1067 samples
-  Features: 12012
-
-================================================================================
-LOADING BACKGROUND DATA (training)
-================================================================================
-  Loading background CSV: /users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_reh/reh_training_data.csv
-  Shape after dropping metadata: 4219 cells x 12490 genes
-  Background ready: 4219 cells x 12012 features (scaled)
-
-================================================================================
-SHAP ANALYSIS - DEEP LEARNING MODEL
-================================================================================
-Model: enhancedense_NFT_reh_fld_1
-  Background source: training data (--background_data)
-Background samples: 4219
-Test samples: 10
-Features: 12012
-nsamples: 12013
-
-Creating SHAP KernelExplainer...
-Computing SHAP values (this may take a while)...
-  0%|          | 0/10 [00:00<?, ?it/s] 10%|█         | 1/10 [00:14<02:11, 14.66s/it] 20%|██        | 2/10 [00:28<01:55, 14.46s/it] 30%|███       | 3/10 [00:41<01:33, 13.38s/it] 40%|████      | 4/10 [00:54<01:19, 13.29s/it] 50%|█████     | 5/10 [01:09<01:09, 13.94s/it] 60%|██████    | 6/10 [01:24<00:56, 14.23s/it] 70%|███████   | 7/10 [01:37<00:41, 13.80s/it] 80%|████████  | 8/10 [01:51<00:28, 14.11s/it] 90%|█████████ | 9/10 [02:06<00:14, 14.44s/it]100%|██████████| 10/10 [02:21<00:00, 14.44s/it]100%|██████████| 10/10 [02:21<00:00, 14.14s/it]
-Shape of shap_values after mean: (10, 12012)
-
-Generating SHAP summary plot...
-  Saved: enhancedense_NFT_reh_fld_1_shap_summary.png
-
-Top 20 SHAP features: ['KPNA2', 'TUBA1C', 'TUBB4B', 'KIF23', 'AURKA', 'KIF20A', 'PLK1', 'BUB1', 'FAM83D', 'CCNB1', 'TOP2A', 'CDCA3', 'RPL21', 'ACTN1', 'RPS5', 'CDC20', 'RPS7', 'ANXA2', 'CDKN3', 'RPS25']
-✅ SHAP analysis completed. Results saved to results/shap_dnn5_reh/human_to_human_gse146773/enhancedense_NFT_reh_fld_1_SHAP.txt
-
-================================================================================
-TOP 10 MOST IMPORTANT FEATURES
-================================================================================
-KPNA2                         : 0.444618
-TUBA1C                        : 0.375346
-TUBB4B                        : 0.368486
-KIF23                         : 0.329399
-AURKA                         : 0.305029
-KIF20A                        : 0.238889
-PLK1                          : 0.234220
-BUB1                          : 0.233880
-FAM83D                        : 0.219222
-CCNB1                         : 0.214886
-================================================================================
-

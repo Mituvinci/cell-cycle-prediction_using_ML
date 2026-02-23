@@ -1,66 +1,0 @@
-/users/ha00014/.conda/envs/pytorch/lib/python3.10/site-packages/torch/cuda/__init__.py:1007: UserWarning: Can't initialize NVML
-  raw_cnt = _raw_device_count_nvml()
-/users/ha00014/.conda/envs/pytorch/lib/python3.10/site-packages/sklearn/base.py:493: UserWarning: X does not have valid feature names, but RobustScaler was fitted with feature names
-  warnings.warn(
-/users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/4_interpretability/run_shap_analysis.py:119: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
-  with torch.no_grad(), torch.cuda.amp.autocast():
-
-================================================================================
-LOADING MODEL
-================================================================================
-Model: enhancedense_NFT_reh_fld_1.pt
-Loading model type: enhancedense
-Hyperparameters: {'learningrate': '0.00010032385413174506', 'optimizer': 'RMSprop', 'nlayers': '5', 'nunits': '[256, 128, 64, 32, 16]', 'dropouts': '[0.2, 0.3, 0.4, 0.5, 0.5]', 'embeddim': '256', 'latentdim': '65', 'epochs': '1500'}
-✓ Loaded DL model: enhancedense
-✓ Model loaded successfully (Deep Learning)
-================================================================================
-
-Loading benchmark data: Buettner_mESC
-  [CROSS-SPECIES MODE] Using zero imputation for missing genes
-  [INFO] Using PREPROCESSED benchmark: Buettner_mESC
-  Loaded 288 samples
-  Features: 12012
-
-================================================================================
-LOADING BACKGROUND DATA (training)
-================================================================================
-  Loading background CSV: /users/ha00014/Halimas_projects/DeepLearning_CellCyelPhaseDetection_scRNASeq/cell_cycle_prediction/1_consensus_labeling/assign/final_training_data_reh/reh_training_data.csv
-  Shape after dropping metadata: 4219 cells x 12490 genes
-  Background ready: 4219 cells x 12012 features (scaled)
-
-================================================================================
-SHAP ANALYSIS - DEEP LEARNING MODEL
-================================================================================
-Model: enhancedense_NFT_reh_fld_1
-  Background source: training data (--background_data)
-Background samples: 4219
-Test samples: 10
-Features: 12012
-nsamples: 12013
-
-Creating SHAP KernelExplainer...
-Computing SHAP values (this may take a while)...
-  0%|          | 0/10 [00:00<?, ?it/s] 10%|█         | 1/10 [00:14<02:07, 14.20s/it] 20%|██        | 2/10 [00:27<01:49, 13.72s/it] 30%|███       | 3/10 [00:39<01:28, 12.70s/it] 40%|████      | 4/10 [00:51<01:14, 12.43s/it] 50%|█████     | 5/10 [01:04<01:04, 12.81s/it] 60%|██████    | 6/10 [01:16<00:49, 12.38s/it] 70%|███████   | 7/10 [01:28<00:37, 12.34s/it] 80%|████████  | 8/10 [01:41<00:25, 12.65s/it] 90%|█████████ | 9/10 [01:53<00:12, 12.49s/it]100%|██████████| 10/10 [02:05<00:00, 12.18s/it]100%|██████████| 10/10 [02:05<00:00, 12.53s/it]
-Shape of shap_values after mean: (10, 12012)
-
-Generating SHAP summary plot...
-  Saved: enhancedense_NFT_reh_fld_1_shap_summary.png
-
-Top 20 SHAP features: ['HMMR', 'UBE2C', 'RPS7', 'HAT1', 'CHAF1B', 'PARP2', 'RPL27A', 'SFI1', 'KIF20A', 'CDCA3', 'ACTR2', 'RPL28', 'PSAT1', 'PPID', 'CDCA8', 'FAM83D', 'TOP2A', 'TMSB10', 'CBX5', 'DUT']
-✅ SHAP analysis completed. Results saved to results/shap_dnn5_reh/human_to_mouse_buettner/enhancedense_NFT_reh_fld_1_SHAP.txt
-
-================================================================================
-TOP 10 MOST IMPORTANT FEATURES
-================================================================================
-HMMR                          : 0.212698
-UBE2C                         : 0.174364
-RPS7                          : 0.172819
-HAT1                          : 0.171439
-CHAF1B                        : 0.168540
-PARP2                         : 0.166787
-RPL27A                        : 0.160352
-SFI1                          : 0.145944
-KIF20A                        : 0.139317
-CDCA3                         : 0.134543
-================================================================================
-
